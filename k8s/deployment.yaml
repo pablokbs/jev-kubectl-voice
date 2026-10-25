@@ -1,0 +1,41 @@
+# Demo: control por voz de Kubernetes.
+# Hablamos en espanol -> Jev interpreta el comando -> kubectl scale -> este Deployment.
+# El backend usa el contexto actual del kubeconfig para leer y escalar este recurso.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx-voice
+  namespace: default
+  labels:
+    app: nginx-voice
+spec:
+  # Linea base de la charla: los comandos de voz escalan aqui (bajo:1, normal:3, alto:10)
+  replicas: 3
+  selector:
+    matchLabels:
+      app: nginx-voice
+  template:
+    metadata:
+      labels:
+        app: nginx-voice
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:alpine
+          ports:
+            - containerPort: 80
+          # Delay artificial de readiness ~1s: los cuadraditos naranjas siguen visibles
+          # porque la UI sondea cada 500ms (2-4 sondeos en naranja por pod).
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 1
+            periodSeconds: 1
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi

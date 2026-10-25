@@ -1,0 +1,63 @@
+{
+  "schemaVersion": 1,
+  "fermentId": "01a14481-41bc-71f5-b303-e308dca6e4e8",
+  "phaseId": "phase-2",
+  "phaseName": "Frontend + assets de demo",
+  "attempt": 1,
+  "timestamp": "2026-10-16T12:16:25.632Z",
+  "goal": "Página web de una sola vista que consume el backend de la fase 1 (micrófono con Web Speech API, transcripción, pensamiento de Jev, contador de pods en vivo), más manifest de Kubernetes, script E2E en modo mock y README con el guion de la charla.",
+  "summary": "Frontend + assets completos: página de demo (public/index.html, app.js, style.css — vanilla, cero CDN, español, diseño para proyección) con micrófono Web Speech API es-ES y fallback de texto, transcripción en vivo, panel \"pensamiento de Jev\" con barras animadas + confianza, contador gigante de pods con polling 2s y log de acciones; manifiesto k8s/deployment.yaml (nginx-voice, baseline 3) con comentarios escénicos; script E2E scripts/e2e-mock.sh ejecutado dos veces exit 0 contra el cluster local real (voz mock → 3→6→3 réplicas reales + frase de ruido salteada, idempotente, cleanup completo); README.md verificado línea por línea contra el código (paths, scripts, defaults, cuerpos de API).",
+  "stepSummaries": "  1. Frontend public/index.html + public/app.js + public/style.css: botón de micrófono con webkitSpeechRecognition (lang es-ES, interim results), input de texto + botón como fallback, panel de transcripción, panel 'pensamiento de jev' con barras de probabilidad por opción y confianza, contador grande de pods que pollea GET /api/status cada 2s, y log de acciones (scaled/skipped + razón). Contrato: POST /api/voice-command {text} y GET /api/status de la fase 1. [verified]\n  2. Manifest k8s/deployment.yaml: Deployment nginx-voice (imagen nginx:alpine, replicas: 3, labels app=nginx-voice, resources mínimos) con comentarios pensados para mostrar en la charla. [verified]\n  3. Script scripts/e2e-mock.sh: aplica el manifest, espera rollout, levanta el server con JEV_MOCK=1, curl POST \"tenemos mucho tráfico\" y assert de replicas=6 vía kubectl jsonpath, curl POST \"el tráfico es normal\" y assert de replicas=3, cleanup (volver a 3 y matar server). Ejecutarlo contra el cluster local del usuario. [verified]\n  4. README.md con: arquitectura (diagrama ASCII voz→browser→server→Jev→kubectl), setup (TYPESAFE_API_KEY, aplicar manifest, npm install && npm run dev, abrir localhost:3000 en Chrome), guion de la charla con las frases de ejemplo, modo ensayo JEV_MOCK=1 sin API key, y troubleshooting (micrófono, contexto de kubectl, latencia de la API). Luego walkthrough manual en vivo: con la API key real, decir \"tenemos mucho tráfico\" y \"el tráfico es normal\" por el micrófono y observar en la UI la transcripción, las barras de probabilidad y el cambio de pods (evidencia inspeccionada, no automatizable). [verified]",
+  "diffAvailable": false,
+  "evidence": "$ bash scripts/e2e-mock.sh (×2) → exit 0: apply+rollout 3/3; POST \"tenemos mucho tráfico\" → \"choice\":\"alto\" → kubectl jsonpath .spec.replicas = 6; POST \"el tráfico es normal\" → \"choice\":\"normal\" → 3; POST \"hoy es martes\" → \"type\":\"skipped\", réplicas estables; trap: server muerto, 3/3 READY, puerto 3199 libre\n$ curl localhost:3123/ | grep id=\"transcript\"|\"thinking\"|\"pod-count\" → exit 0; /app.js y /style.css → 200; cero URLs externas en public/\n$ kubectl apply --dry-run=client -f k8s/deployment.yaml → \"deployment.apps/nginx-voice created (dry run)\" exit 0\n$ grep TYPESAFE_API_KEY/JEV_MOCK/'tenemos mucho tr' README.md → exit 0; README inspeccionado: 14 paths existen, 4 scripts npm reales, defaults 3000/0.5/1-3-6 correctos\n$ npm test → 56/56 (9 suites)",
+  "flags": [
+    {
+      "problem": "Gate F3 flagged: Único item diferido, por diseño y con aceptación explícita pendiente: el walkthrough manual EN VIVO con voz real y TYPESAFE_API_KEY real (frases por micrófono en Chrome) solo puede hacerlo el usuario — es evidencia inspeccionada no automatizable. Todo lo que sí es automatizable (loop voz→clasificación→scale, UI servida, E2E) está verificado; propongo ejecutarlo con el usuario ahora antes de complete_ferment.",
+      "evidence": "Step 4: worker respetó out-of-scope, walkthrough en vivo no intentado (requiere voz + mic + key del usuario)",
+      "severity": "block",
+      "redirect": "Address F3 before completing this phase. The flag was self-reported — fix the underlying problem and re-submit the gate with verdict 'pass' (or 'omitted' with rationale if the gate truly does not apply)."
+    }
+  ],
+  "derivedGrade": "F",
+  "reviewerRationale": "1 block flag(s) raised — see attached gate verdicts and project checks.",
+  "gateVerdicts": [
+    {
+      "id": "F1",
+      "verdict": "pass",
+      "rationale": "Verificaciones dominantes son reales: el E2E corrió el loop completo contra el cluster en vivo (dos veces exit 0, pods reales escalados), el frontend se sirvió por el backend real y fue inspeccionado end-to-end, el README se validó contra el código. Solo el grep del README y el dry-run del manifest son livianos, apropiados para su naturaleza (docs/YAML).",
+      "evidence": "bash scripts/e2e-mock.sh exit 0 ×2; curl / con ids requeridos exit 0; kubectl dry-run exit 0; npm test 56/56"
+    },
+    {
+      "id": "F2",
+      "verdict": "pass",
+      "rationale": "Los 4 outputs conjugan el goal de fase: la UI consume el backend de la fase 1 (contrato verificado con POST/GET reales), el manifest crea el deployment objetivo, el E2E demuestra integración completa, y el README explica reproducción y guion — página + manifest + script + docs, todo presente.",
+      "evidence": "public/ servido con ids requeridos; k8s/deployment.yaml dry-run válido y aplicado por el E2E; réplicas reales 3→6→3 observadas vía jsonpath"
+    },
+    {
+      "id": "F3",
+      "verdict": "flag",
+      "rationale": "Único item diferido, por diseño y con aceptación explícita pendiente: el walkthrough manual EN VIVO con voz real y TYPESAFE_API_KEY real (frases por micrófono en Chrome) solo puede hacerlo el usuario — es evidencia inspeccionada no automatizable. Todo lo que sí es automatizable (loop voz→clasificación→scale, UI servida, E2E) está verificado; propongo ejecutarlo con el usuario ahora antes de complete_ferment.",
+      "evidence": "Step 4: worker respetó out-of-scope, walkthrough en vivo no intentado (requiere voz + mic + key del usuario)"
+    }
+  ],
+  "projectChecks": {
+    "discovered": true,
+    "anyFailed": false,
+    "commands": [
+      {
+        "kind": "test",
+        "command": "npm test",
+        "exitCode": 0,
+        "durationMs": 0,
+        "timedOut": false
+      },
+      {
+        "kind": "typecheck",
+        "command": "npm run typecheck",
+        "exitCode": 0,
+        "durationMs": 0,
+        "timedOut": false
+      }
+    ]
+  }
+}

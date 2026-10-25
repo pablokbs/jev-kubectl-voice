@@ -1,0 +1,24 @@
+{
+  "name": "jev-kubectl-voice",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Demo de conferencia: clasificación de transcripciones de voz en español con Jev (TypeSafe AI) y escalado de un despliegue nginx en Kubernetes.",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "test": "node --test --import tsx src/**/*.test.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@typesafe-ai/sdk": "^0.7.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
