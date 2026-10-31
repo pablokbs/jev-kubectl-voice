@@ -1,54 +1,53 @@
 /**
- * Envoltorio tipado sobre `kubectl` para consultar y escalar el despliegue.
+ * Typed wrapper around `kubectl` for querying and scaling the deployment.
  *
- * Nunca construye una cadena de shell: el runner por defecto usa `execFile`
- * con el binario `kubectl` y un array de argumentos, de modo que ningún texto
- * (nombre del despliegue, namespace) pueda interpretarse como parte del
- * comando. La ejecución es inyectable (`KubectlRunner`) para testear sin
- * kubectl ni clúster.
+ * Never builds a shell string: the default runner uses `execFile` with the
+ * `kubectl` binary and an argument array, so no text (deployment name,
+ * namespace) can be interpreted as part of the command. The execution is
+ * injectable (`KubectlRunner`) for testing without kubectl or a cluster.
  */
 
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 
-/** Estado de un despliegue, limitado a lo que la demo necesita. */
+/** Status of a deployment, limited to what the demo needs. */
 export interface DeploymentStatus {
-  /** Réplicas deseadas (`spec.replicas`). */
+  /** Desired replicas (`spec.replicas`). */
   replicas: number;
-  /** Réplicas listas (`status.readyReplicas`). */
+  /** Ready replicas (`status.readyReplicas`). */
   readyReplicas: number;
 }
 
-/** Desglose de estados de los pods seleccionados, lo que pinta la UI. */
+/** Breakdown of the selected pods' states, what the UI paints. */
 export interface PodStates {
-  /** Pods con phase Running y todos los contenedores ready. */
+  /** Pods with phase Running and all containers ready. */
   running: number;
-  /** Pods arrancando (Pending, CrashLoop, Running con contenedores no listos…). */
+  /** Pods starting up (Pending, CrashLoop, Running with not-ready containers…). */
   starting: number;
-  /** Pods con metadata.deletionTimestamp (terminando). */
+  /** Pods with metadata.deletionTimestamp (terminating). */
   terminating: number;
 }
 
-/** Tipos de fallo reconocidos por el envoltorio de kubectl. */
+/** Failure kinds recognized by the kubectl wrapper. */
 export type KubectlErrorKind = "not_found" | "kubectl_unavailable" | "kubectl_failed";
 
-/** Opciones adicionales de `KubectlError`. */
+/** Additional options for `KubectlError`. */
 export interface KubectlErrorOptions {
-  /** stderr crudo capturado de kubectl, si existe. */
+  /** Raw stderr captured from kubectl, if any. */
   stderr?: string;
-  /** Código de salida del proceso, si kubectl llegó a ejecutarse. */
+  /** Exit code of the process, if kubectl actually ran. */
   exitCode?: number;
-  /** Error original (de execFile o de JSON.parse). */
+  /** Original error (from execFile or JSON.parse). */
   cause?: unknown;
 }
 
-/** Error tipado para cualquier fallo de kubectl, discriminado por `kind`. */
+/** Typed error for any kubectl failure, discriminated by `kind`. */
 export class KubectlError extends Error {
-  /** Discriminador del tipo de fallo. */
+  /** Failure-kind discriminator. */
   readonly kind: KubectlErrorKind;
-  /** stderr crudo capturado, si lo hubo. */
+  /** Raw captured stderr, if any. */
   readonly stderr: string | undefined;
-  /** Código de salida del proceso, si kubectl llegó a ejecutarse. */
+  /** Exit code of the process, if kubectl actually ran. */
   readonly exitCode: number | undefined;
 
   constructor(
@@ -65,25 +64,25 @@ export class KubectlError extends Error {
 }
 
 /**
- * Costura de inyección: ejecuta kubectl con el array de argumentos dado y
- * devuelve stdout/stderr. Cualquier implementación debe lanzar el proceso sin
- * shell y rechazar con el error crudo de ejecución.
+ * Injection seam: runs kubectl with the given argument array and returns
+ * stdout/stderr. Any implementation must spawn the process without a shell
+ * and reject with the raw execution error.
  */
 export type KubectlRunner = (args: string[]) => Promise<{ stdout: string; stderr: string }>;
 
 const execFileAsync = promisify(execFile);
 
 /**
- * Runner por defecto: `execFile("kubectl", args)`. Sin shell y sin
- * interpolación de texto: el nombre y el namespace viajan como argumentos
- * separados, nunca como parte de una cadena de comando.
+ * Default runner: `execFile("kubectl", args)`. No shell and no text
+ * interpolation: the name and namespace travel as separate arguments, never
+ * as part of a command string.
  */
 export const defaultKubectlRunner: KubectlRunner = async (args) => {
   const { stdout, stderr } = await execFileAsync("kubectl", args);
   return { stdout, stderr };
 };
 
-/** Forma del error que rechaza `execFile` promisificado (o de un doble de prueba). */
+/** Shape of the error that promisified `execFile` rejects with (or a test double). */
 interface ExecFailure {
   code?: string | number;
   stderr?: string | Buffer;
@@ -94,12 +93,11 @@ function stderrOf(value: unknown): string {
 }
 
 /**
- * Mapea un fallo crudo de ejecución de kubectl al `KubectlError` correspondiente:
+ * Maps a raw kubectl execution failure to the corresponding `KubectlError`:
  *
- * - `ENOENT` → `kubectl_unavailable` (el binario no está instalado o no está
- *   en el PATH).
- * - Salida no cero con `NotFound` en stderr → `not_found`.
- * - Cualquier otro caso → `kubectl_failed`, conservando stderr y código de salida.
+ * - `ENOENT` → `kubectl_unavailable` (binary not installed or not on PATH).
+ * - Non-zero exit with `NotFound` in stderr → `not_found`.
+ * - Any other case → `kubectl_failed`, preserving stderr and exit code.
  */
 export function toKubectlError(error: unknown): KubectlError {
   const failure = (error ?? {}) as ExecFailure;
@@ -108,7 +106,7 @@ export function toKubectlError(error: unknown): KubectlError {
   if (failure.code === "ENOENT") {
     return new KubectlError(
       "kubectl_unavailable",
-      "El binario kubectl no está disponible (ENOENT): instálalo y verifica que esté en el PATH.",
+      "The kubectl binary is not available (ENOENT): install it and verify it is on your PATH.",
       { stderr, cause: error },
     );
   }
@@ -117,32 +115,32 @@ export function toKubectlError(error: unknown): KubectlError {
   if (exitCode !== undefined && stderr.includes("NotFound")) {
     return new KubectlError(
       "not_found",
-      `kubectl no encontró el recurso (código de salida ${exitCode}).`,
+      `kubectl did not find the resource (exit code ${exitCode}).`,
       { stderr, exitCode, cause: error },
     );
   }
 
   return new KubectlError(
     "kubectl_failed",
-    `kubectl falló (código de salida ${failure.code ?? "desconocido"}).`,
+    `kubectl failed (exit code ${failure.code ?? "unknown"}).`,
     { stderr, exitCode, cause: error },
   );
 }
 
-/** Selección explícita de cluster para kubectl: flags globales opcionales. */
+/** Explicit cluster selection for kubectl: optional global flags. */
 export interface KubectlCluster {
-  /** Ruta a un archivo kubeconfig alternativo (viaja como `--kubeconfig <ruta>`). */
+  /** Path to an alternative kubeconfig file (travels as `--kubeconfig <path>`). */
   kubeconfig?: string;
-  /** Nombre de contexto dentro del kubeconfig (viaja como `--context <nombre>`). */
+  /** Context name inside the kubeconfig (travels as `--context <name>`). */
   context?: string;
 }
 
 /**
- * Construye los argumentos globales de selección de cluster, siempre como
- * elementos separados del array (nunca dentro de una cadena de comando):
- * kubeconfig → `--kubeconfig <ruta>`, contexto → `--context <nombre>`, en ese
- * orden determinista. Sin ninguno devuelve `[]`, de modo que kubectl use su
- * comportamiento por defecto (kubeconfig y contexto actuales).
+ * Builds the global cluster-selection arguments, always as separate array
+ * elements (never inside a command string): kubeconfig → `--kubeconfig <path>`,
+ * context → `--context <name>`, in that deterministic order. With neither set
+ * it returns `[]`, so kubectl uses its default behaviour (current kubeconfig
+ * and context).
  */
 function clusterArgs(cluster: KubectlCluster | undefined): string[] {
   if (!cluster) return [];
@@ -152,7 +150,7 @@ function clusterArgs(cluster: KubectlCluster | undefined): string[] {
   return args;
 }
 
-/** Ejecuta el runner inyectado y mapea cualquier rechazo crudo a `KubectlError`. */
+/** Runs the injected runner and maps any raw rejection to `KubectlError`. */
 async function runKubectl(
   args: string[],
   runner: KubectlRunner,
@@ -166,14 +164,14 @@ async function runKubectl(
 }
 
 /**
- * Consulta el estado de un despliegue:
- * `kubectl get deployment <name> -n <ns> -o json [--kubeconfig <ruta>] [--context <nombre>]`.
+ * Queries a deployment's status:
+ * `kubectl get deployment <name> -n <ns> -o json [--kubeconfig <path>] [--context <name>]`.
  *
- * Los flags de cluster (opcionales) se añaden al final: kubectl acepta sus
- * flags globales después de los argumentos del comando.
+ * The (optional) cluster flags are appended at the end: kubectl accepts its
+ * global flags after the command arguments.
  *
- * Devuelve `{ replicas, readyReplicas }` con 0 como valor por defecto cuando
- * `spec.replicas` o `status.readyReplicas` faltan en la salida.
+ * Returns `{ replicas, readyReplicas }` with 0 as the default when
+ * `spec.replicas` or `status.readyReplicas` are missing from the output.
  */
 export async function getStatus(
   name: string,
@@ -194,7 +192,7 @@ export async function getStatus(
     const reason = parseError instanceof Error ? parseError.message : String(parseError);
     throw new KubectlError(
       "kubectl_failed",
-      `No se pudo analizar la salida JSON de kubectl: ${reason}. Salida recibida: "${snippet}"`,
+      `Could not parse kubectl's JSON output: ${reason}. Received: "${snippet}"`,
       { cause: parseError },
     );
   }
@@ -209,12 +207,12 @@ export async function getStatus(
 }
 
 /**
- * Clasifica un pod de la lista JSON en su estado para la demo:
+ * Classifies a pod from the JSON list into its demo state:
  *
- * - `metadata.deletionTimestamp` presente → `terminating`.
- * - `status.phase === "Running"` con `status.containerStatuses` no vacío y
- *   todos los contenedores `ready: true` → `running`.
- * - Cualquier otro caso (Pending, sin containerStatuses, Running no listo…) → `starting`.
+ * - `metadata.deletionTimestamp` present → `terminating`.
+ * - `status.phase === "Running"` with non-empty `status.containerStatuses`
+ *   and all containers `ready: true` → `running`.
+ * - Any other case (Pending, no containerStatuses, Running not ready…) → `starting`.
  */
 function classifyPod(item: unknown): keyof PodStates {
   const pod = typeof item === "object" && item !== null ? item : {};
@@ -232,14 +230,14 @@ function classifyPod(item: unknown): keyof PodStates {
 }
 
 /**
- * Consulta el desglose de estados de los pods del selector:
- * `kubectl get pods -l <selector> -n <ns> -o json [--kubeconfig <ruta>] [--context <nombre>]`.
+ * Queries the state breakdown of the selector's pods:
+ * `kubectl get pods -l <selector> -n <ns> -o json [--kubeconfig <path>] [--context <name>]`.
  *
- * Los flags de cluster (opcionales) se añaden al final, igual que en `getStatus`.
+ * The (optional) cluster flags are appended at the end, same as in `getStatus`.
  *
- * Items ausentes o vacíos → todo en ceros. Salida no JSON → `KubectlError`
- * con kind `kubectl_failed` (los fallos de ejecución se mapean igual que en
- * `getStatus`, incluida la semántica `not_found` cuando kubectl así responde).
+ * Missing or empty items → all zeros. Non-JSON output → `KubectlError` with
+ * kind `kubectl_failed` (execution failures map the same as in `getStatus`,
+ * including the `not_found` semantics when kubectl answers that way).
  */
 export async function getPodStates(
   podSelector: string,
@@ -260,7 +258,7 @@ export async function getPodStates(
     const reason = parseError instanceof Error ? parseError.message : String(parseError);
     throw new KubectlError(
       "kubectl_failed",
-      `No se pudo analizar la salida JSON de kubectl (pods): ${reason}. Salida recibida: "${snippet}"`,
+      `Could not parse kubectl's JSON output (pods): ${reason}. Received: "${snippet}"`,
       { cause: parseError },
     );
   }
@@ -276,14 +274,14 @@ export async function getPodStates(
 }
 
 /**
- * Escala un despliegue:
- * `kubectl scale deployment <name> -n <ns> --replicas=<n> [--kubeconfig <ruta>] [--context <nombre>]`.
+ * Scales a deployment:
+ * `kubectl scale deployment <name> -n <ns> --replicas=<n> [--kubeconfig <path>] [--context <name>]`.
  *
- * Los flags de cluster (opcionales) van al final: kubectl acepta los flags
- * globales después de los argumentos del comando.
+ * The (optional) cluster flags go at the end: kubectl accepts global flags
+ * after the command arguments.
  *
- * Valida que `replicas` sea un entero seguro >= 0 (rechaza NaN, fracciones y
- * negativos) antes de invocar kubectl. No devuelve nada.
+ * Validates that `replicas` is a safe integer >= 0 (rejects NaN, fractions
+ * and negatives) before invoking kubectl. Returns nothing.
  */
 export async function scaleDeployment(
   name: string,
@@ -294,7 +292,7 @@ export async function scaleDeployment(
 ): Promise<void> {
   if (!Number.isSafeInteger(replicas) || replicas < 0) {
     throw new TypeError(
-      `Las réplicas deben ser un entero seguro >= 0 (recibido: ${String(replicas)})`,
+      `Replicas must be a safe integer >= 0 (received: ${String(replicas)})`,
     );
   }
   await runKubectl(

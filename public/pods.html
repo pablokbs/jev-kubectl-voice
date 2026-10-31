@@ -1,16 +1,16 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Estado del cluster</title>
-    <!-- Pantalla secundaria: solo los cuadraditos de pods, sin controles de la demo principal. -->
+    <title>Cluster status</title>
+    <!-- Secondary screen: only the pod squares, without the main demo's controls. -->
     <link rel="stylesheet" href="/style.css" />
     <style>
       /*
-       * Overrides mínimos solo para esta página (style.css queda intacto):
-       * la cuadrícula ocupa el ancho completo y los cuadrados se ven más
-       * grandes para el proyector.
+       * Minimal overrides just for this page (style.css stays untouched):
+       * the grid takes the full width and the squares render bigger
+       * for the projector.
        */
       .principal {
         grid-template-columns: 1fr;
@@ -34,18 +34,18 @@
     <script src="/pods.js" defer></script>
   </head>
   <body>
-    <!-- Cabecera: título neutro + pill de estado backend/cluster -->
+    <!-- Header: neutral title + backend/cluster status pill -->
     <header class="cabecera">
-      <h1 class="titulo">Estado del cluster</h1>
+      <h1 class="titulo">Cluster status</h1>
       <div id="status-pill" class="pill pill-conectando">
         <span class="pill-punto"></span>
-        <span id="status-texto">conectando…</span>
+        <span id="status-texto">connecting…</span>
       </div>
     </header>
 
     <main class="principal">
-      <!-- Cuadrícula de pods: un cuadrado por pod + leyenda + subline listos/total -->
-      <section class="panel panel-pods" aria-label="Réplicas en el cluster">
+      <!-- Pod grid: one square per pod + legend + ready/total subline -->
+      <section class="panel panel-pods" aria-label="Replicas in the cluster">
         <div class="pods-fila">
           <div id="pod-count" class="pods-cuadricula" aria-live="polite">
             <span class="pods-vacio">—</span>
@@ -53,13 +53,13 @@
         </div>
         <div class="pods-leyenda">
           <span class="leyenda">
-            <span class="leyenda-cuadro pod-square--running"></span>corriendo
+            <span class="leyenda-cuadro pod-square--running"></span>running
           </span>
           <span class="leyenda">
-            <span class="leyenda-cuadro pod-square--starting"></span>arrancando
+            <span class="leyenda-cuadro pod-square--starting"></span>starting
           </span>
           <span class="leyenda">
-            <span class="leyenda-cuadro pod-square--terminating"></span>muriendo
+            <span class="leyenda-cuadro pod-square--terminating"></span>terminating
           </span>
         </div>
         <p id="pod-ready" class="pods-subline">&nbsp;</p>

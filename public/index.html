@@ -1,34 +1,34 @@
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Voz → Jev → Kubernetes — demo en vivo</title>
-    <!-- Sin dependencias externas: todo local, la wifi del venue no se puede confiar. -->
+    <title>Voice → Jev → Kubernetes — live demo</title>
+    <!-- No external dependencies: everything is local, the venue wifi can't be trusted. -->
     <link rel="stylesheet" href="/style.css" />
     <script src="/app.js" defer></script>
   </head>
   <body>
-    <!-- 1. Cabecera: título de la demo + pill de estado backend/cluster -->
+    <!-- 1. Header: demo title + backend/cluster status pill -->
     <header class="cabecera">
-      <h1 class="titulo">Voz → Jev → Kubernetes</h1>
+      <h1 class="titulo">Voice → Jev → Kubernetes</h1>
       <div id="status-pill" class="pill pill-conectando">
         <span class="pill-punto"></span>
-        <span id="status-texto">conectando…</span>
+        <span id="status-texto">connecting…</span>
       </div>
     </header>
 
     <main class="principal">
-      <!-- Columna izquierda: micrófono + lo que dije -->
+      <!-- Left column: microphone + what I said -->
       <div class="columna col-izquierda">
-        <!-- 2. Control de micrófono (principal, a la izquierda) -->
-        <section class="panel panel-micro" aria-label="Control de micrófono">
+        <!-- 2. Microphone control (main, on the left) -->
+        <section class="panel panel-micro" aria-label="Microphone control">
           <button
             id="mic-button"
             class="micro"
             type="button"
-            aria-label="Hablar: pulsar para dictar un comando"
-            title="Pulsá y hablá (es-ES)"
+            aria-label="Speak: press to dictate a command"
+            title="Press and speak (en-US)"
           >
             <span class="micro-icono" aria-hidden="true">🎙️</span>
           </button>
@@ -40,38 +40,38 @@
                 type="text"
                 autocomplete="off"
                 spellcheck="false"
-                placeholder="…o escribí el comando acá y apretá Enter"
-                aria-label="Comando de texto"
+                placeholder="…or type the command here and press Enter"
+                aria-label="Text command"
               />
-              <button id="send-button" class="boton-enviar" type="button">Enviar</button>
+              <button id="send-button" class="boton-enviar" type="button">Send</button>
             </div>
-            <p id="mic-hint" class="micro-hint">Pulsá el micro y hablá.</p>
+            <p id="mic-hint" class="micro-hint">Press the mic and speak.</p>
           </div>
         </section>
 
-        <!-- 3. Panel "Lo que dije": transcripción final grande, interina más tenue -->
-        <section class="panel panel-transcripcion" aria-label="Lo que dije">
-          <h2 class="panel-titulo">Lo que dije</h2>
+        <!-- 3. "What I said" panel: big final transcript, dimmer interim -->
+        <section class="panel panel-transcripcion" aria-label="What I said">
+          <h2 class="panel-titulo">What I said</h2>
           <div id="transcript" class="transcripcion">
-            <span class="vacio">todavía no dijiste nada…</span>
+            <span class="vacio">you haven't said anything yet…</span>
           </div>
         </section>
       </div>
 
-      <!-- Columna derecha: pensamiento de Jev + contador de pods -->
+      <!-- Right column: Jev's thinking + pod counter -->
       <div class="columna col-derecha">
-        <!-- 4. Panel "El pensamiento de Jev": barras de probabilidad + confianza -->
-        <section class="panel panel-pensamiento" aria-label="El pensamiento de Jev">
-          <h2 class="panel-titulo">El pensamiento de Jev</h2>
+        <!-- 4. "Jev's thinking" panel: probability bars + confidence -->
+        <section class="panel panel-pensamiento" aria-label="Jev's thinking">
+          <h2 class="panel-titulo">Jev's thinking</h2>
           <div id="thinking" class="pensamiento">
-            <p class="vacio">Jev aún no pensó nada — mandá un comando y mirá cómo decide.</p>
+            <p class="vacio">Jev hasn't thought yet — send a command and watch it decide.</p>
           </div>
-          <!-- Línea de timing: "⚡ Jev decidió en N ms", la pinta app.js con classify_ms. -->
+          <!-- Timing line: "⚡ Jev decided in N ms", painted by app.js from classify_ms. -->
           <p id="jev-timing" class="jev-timing" hidden></p>
         </section>
 
-        <!-- 5. Contador de pods: cuadraditos (uno por pod) + leyenda + subline listos/total -->
-        <section class="panel panel-pods" aria-label="Réplicas en el cluster">
+        <!-- 5. Pod counter: squares (one per pod) + legend + ready/total subline -->
+        <section class="panel panel-pods" aria-label="Replicas in the cluster">
           <h2 class="panel-titulo">
             Kubernetes · <span id="pod-deployment">nginx-voice</span>
           </h2>
@@ -82,13 +82,13 @@
           </div>
           <div class="pods-leyenda">
             <span class="leyenda">
-              <span class="leyenda-cuadro pod-square--running"></span>corriendo
+              <span class="leyenda-cuadro pod-square--running"></span>running
             </span>
             <span class="leyenda">
-              <span class="leyenda-cuadro pod-square--starting"></span>arrancando
+              <span class="leyenda-cuadro pod-square--starting"></span>starting
             </span>
             <span class="leyenda">
-              <span class="leyenda-cuadro pod-square--terminating"></span>muriendo
+              <span class="leyenda-cuadro pod-square--terminating"></span>terminating
             </span>
           </div>
           <p id="pod-ready" class="pods-subline">&nbsp;</p>
@@ -96,11 +96,11 @@
       </div>
     </main>
 
-    <!-- 4b. Registro de acciones: últimos 5 eventos, el más nuevo primero -->
-    <section class="panel panel-log" aria-label="Registro de acciones">
-      <h2 class="panel-titulo">Registro de acciones</h2>
+    <!-- 4b. Action log: last 5 events, newest first -->
+    <section class="panel panel-log" aria-label="Action log">
+      <h2 class="panel-titulo">Action log</h2>
       <ol id="action-log" class="log">
-        <li class="log-vacio">todavía no pasó nada…</li>
+        <li class="log-vacio">nothing has happened yet…</li>
       </ol>
     </section>
   </body>

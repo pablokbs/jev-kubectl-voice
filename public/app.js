@@ -1,53 +1,53 @@
 /**
- * Frontend de la demo "Voz → Jev → Kubernetes" (vanilla JS, cero dependencias).
+ * Frontend of the "Voice → Jev → Kubernetes" demo (vanilla JS, zero dependencies).
  *
- * Flujo:
- *  1. El operador habla (webkitSpeechRecognition, es-ES) o escribe un comando.
- *  2. Se envía por POST a /api/voice-command y se muestra la transcripción.
- *  3. Se dibuja "el pensamiento de Jev": barras de probabilidad + confianza.
- *  4. Cada medio segundo (500 ms) se consulta /api/status para pintar los pods
- *     (verde corriendo, naranja arrancando, rojo terminando).
- *  5. Cada acción queda en el registro inferior (últimos 5 eventos).
+ * Flow:
+ *  1. The operator speaks (webkitSpeechRecognition, en-US) or types a command.
+ *  2. It is POSTed to /api/voice-command and the transcript is shown.
+ *  3. "Jev's thinking" is drawn: probability bars + confidence.
+ *  4. Every half second (500 ms) /api/status is polled to paint the pods
+ *     (green running, orange starting, red terminating).
+ *  5. Every action lands in the bottom log (last 5 events).
  */
 
 /* ------------------------------------------------------------------ */
-/* Estado global mínimo de la demo                                     */
+/* Minimal global state of the demo                                    */
 /* ------------------------------------------------------------------ */
 
-/** Reconocimiento de voz del navegador (Chrome: webkitSpeechRecognition). */
+/** Browser speech recognition (Chrome: webkitSpeechRecognition). */
 const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
-/** Nivel de tráfico en orden fijo para las barras de probabilidad. */
+/** Traffic level in fixed order for the probability bars. */
 const NIVELES = [
-  { clave: "bajo", nombre: "tráfico bajo" },
-  { clave: "normal", nombre: "tráfico normal" },
-  { clave: "alto", nombre: "tráfico alto" },
-  { clave: "no_se", nombre: "no lo sé" },
+  { clave: "low", nombre: "low traffic" },
+  { clave: "normal", nombre: "normal traffic" },
+  { clave: "high", nombre: "high traffic" },
+  { clave: "unsure", nombre: "not sure" },
 ];
 
-/** Umbral de confianza que usa la política del backend (para la marca visual). */
+/** Confidence threshold used by the backend policy (for the visual marker). */
 const UMBRAL_CONFIANZA = 0.5;
 
-/** Intervalo de sondeo de /api/status en ms: medio segundo, para ver el naranja. */
+/** /api/status polling interval in ms: half a second, to see the orange. */
 const INTERVALO_SONDEO_MS = 500;
 
-/** true mientras hay un POST /api/voice-command en vuelo (anti doble envío). */
+/** true while a POST /api/voice-command is in flight (anti double-send). */
 let enviando = false;
 
-/** true mientras el micrófono está grabando. */
+/** true while the microphone is recording. */
 let grabando = false;
 
-/** Reconocimiento de voz activo (o null). */
+/** Active speech recognition (or null). */
 let reconocimiento = null;
 
-/** Última firma (running,starting,terminating) pintada: solo se redibuja si cambia. */
+/** Last painted (running,starting,terminating) signature: redraw only on change. */
 let ultimaFirmaPods = null;
 
-/** Texto final acumulado de la transcripción en curso. */
+/** Accumulated final text of the transcript in progress. */
 let transcripcionFinal = "";
 
 /* ------------------------------------------------------------------ */
-/* Atajos de DOM                                                       */
+/* DOM shortcuts                                                       */
 /* ------------------------------------------------------------------ */
 
 const el = (id) => document.getElementById(id);
@@ -69,31 +69,31 @@ const ui = {
 };
 
 /* ------------------------------------------------------------------ */
-/* Utilidades                                                          */
+/* Utilities                                                           */
 /* ------------------------------------------------------------------ */
 
-/** Hora local HH:MM:SS para el registro. */
+/** Local HH:MM:SS time for the log. */
 function horaActual() {
-  return new Date().toLocaleTimeString("es-ES", { hour12: false });
+  return new Date().toLocaleTimeString("en-US", { hour12: false });
 }
 
-/** fetch + guarda de JSON: devuelve null si la respuesta no es JSON válido. */
+/** fetch + JSON guard: returns null when the response is not valid JSON. */
 async function pedirJson(url, opciones) {
   try {
     const res = await fetch(url, opciones);
     const datos = await res.json().catch(() => null);
     return { ok: res.ok, status: res.status, datos };
   } catch {
-    // Error de red: el bucle de sondeo nunca debe romperse por esto.
+    // Network error: the polling loop must never break because of this.
     return { ok: false, status: 0, datos: null };
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Transcripción ("Lo que dije")                                       */
+/* Transcript ("What I said")                                          */
 /* ------------------------------------------------------------------ */
 
-/** Pinta la transcripción: texto final grande + interino más tenue. */
+/** Paints the transcript: big final text + dimmer interim. */
 function pintarTranscripcion(interino) {
   ui.transcripcion.replaceChildren();
 
@@ -118,22 +118,22 @@ function pintarTranscripcion(interino) {
   if (!transcripcionFinal && !interino) {
     const vacio = document.createElement("span");
     vacio.className = "vacio";
-    vacio.textContent = "todavía no dijiste nada…";
+    vacio.textContent = "you haven't said anything yet…";
     ui.transcripcion.appendChild(vacio);
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Pensamiento de Jev (barras de probabilidad + confianza)             */
+/* Jev's thinking (probability bars + confidence)                      */
 /* ------------------------------------------------------------------ */
 
-/** Oculta la línea de timing (nuevo comando en vuelo, error o dato ausente). */
+/** Hides the timing line (new command in flight, error or missing data). */
 function ocultarTiming() {
   ui.timing.hidden = true;
   ui.timing.textContent = "";
 }
 
-/** Muestra "⚡ Jev decidió en N ms" con el classify_ms del backend. */
+/** Shows "⚡ Jev decided in N ms" with the backend's classify_ms. */
 function pintarTiming(timings) {
   const ms = timings && typeof timings.classify_ms === "number" && timings.classify_ms >= 0
     ? timings.classify_ms
@@ -143,10 +143,10 @@ function pintarTiming(timings) {
     return;
   }
   ui.timing.hidden = false;
-  ui.timing.textContent = `⚡ Jev decidió en ${ms} ms`;
+  ui.timing.textContent = `⚡ Jev decided in ${ms} ms`;
 }
 
-/** Estado "pensando…": mensaje sutil mientras el POST está en vuelo. */
+/** "thinking…" state: subtle message while the POST is in flight. */
 function pintarPensando() {
   ui.pensamiento.className = "pensamiento pensando";
   ui.pensamiento.replaceChildren();
@@ -154,11 +154,11 @@ function pintarPensando() {
 
   const msj = document.createElement("p");
   msj.className = "pensando-msj";
-  msj.textContent = "pensando…";
+  msj.textContent = "thinking…";
   ui.pensamiento.appendChild(msj);
 }
 
-/** Dibuja una fila de barra para un nivel de tráfico. */
+/** Draws a bar row for a traffic level. */
 function crearBarra(clave, nombre, probabilidad, esGanadora) {
   const fila = document.createElement("div");
   fila.className = esGanadora ? "opcion ganadora" : "opcion";
@@ -172,7 +172,7 @@ function crearBarra(clave, nombre, probabilidad, esGanadora) {
 
   const relleno = document.createElement("div");
   relleno.className = `opcion-relleno nivel-${clave}`;
-  // Transición CSS: arranca en 0 y sube al valor real en el próximo frame.
+  // CSS transition: starts at 0 and rises to the real value on the next frame.
   relleno.style.width = "0%";
   requestAnimationFrame(() => {
     relleno.style.width = `${Math.round(probabilidad * 100)}%`;
@@ -187,7 +187,7 @@ function crearBarra(clave, nombre, probabilidad, esGanadora) {
   return fila;
 }
 
-/** Dibuja el bloque de confianza: porcentaje grande + barra con umbral. */
+/** Draws the confidence block: big percentage + bar with threshold marker. */
 function crearConfianza(confidence) {
   const bloque = document.createElement("div");
   bloque.className = "confianza";
@@ -195,7 +195,7 @@ function crearConfianza(confidence) {
   const valor = document.createElement("span");
   const baja = confidence < UMBRAL_CONFIANZA;
   valor.className = baja ? "confianza-valor baja" : "confianza-valor";
-  valor.textContent = `confianza: ${Math.round(confidence * 100)}%`;
+  valor.textContent = `confidence: ${Math.round(confidence * 100)}%`;
 
   const pista = document.createElement("div");
   pista.className = "confianza-pista";
@@ -209,18 +209,18 @@ function crearConfianza(confidence) {
 
   const umbral = document.createElement("div");
   umbral.className = "confianza-umbral";
-  umbral.title = `umbral de la política: ${Math.round(UMBRAL_CONFIANZA * 100)}%`;
+  umbral.title = `policy threshold: ${Math.round(UMBRAL_CONFIANZA * 100)}%`;
 
   const nota = document.createElement("span");
   nota.className = "confianza-nota";
-  nota.textContent = "umbral 50%";
+  nota.textContent = "threshold 50%";
 
   pista.append(relleno, umbral, nota);
   bloque.append(valor, pista);
   return bloque;
 }
 
-/** Pinta la clasificación completa de Jev (barras + ganadora + confianza). */
+/** Paints Jev's full classification (bars + winner + confidence). */
 function pintarPensamiento(classification) {
   const probabilidades = classification?.probabilities ?? {};
   ui.pensamiento.className = "pensamiento";
@@ -236,10 +236,10 @@ function pintarPensamiento(classification) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Registro de acciones (últimos 5 eventos, el más nuevo primero)      */
+/* Action log (last 5 events, newest first)                            */
 /* ------------------------------------------------------------------ */
 
-/** Agrega un evento al registro y lo re-renderiza (máximo 5). */
+/** Adds an event to the log and re-renders it (max 5). */
 function registrarAccion(texto, clase) {
   const item = document.createElement("li");
 
@@ -253,7 +253,7 @@ function registrarAccion(texto, clase) {
 
   item.append(hora, msj);
 
-  // El más nuevo primero, tope de 5 eventos.
+  // Newest first, capped at 5 events.
   const vacio = ui.log.querySelector(".log-vacio");
   if (vacio) vacio.remove();
   ui.log.prepend(item);
@@ -262,24 +262,24 @@ function registrarAccion(texto, clase) {
   }
 }
 
-/** Traduce la parte `action` de la respuesta a una línea del registro. */
+/** Translates the `action` part of the response into a log line. */
 function registrarAction(action) {
   if (!action) return;
   const antes = action.replicas_before === null ? "—" : action.replicas_before;
   if (action.type === "scaled") {
-    registrarAccion(`✅ escalado a ${action.replicas_after} réplicas (antes: ${antes})`, "log-escalado");
+    registrarAccion(`✅ scaled to ${action.replicas_after} replicas (was: ${antes})`, "log-escalado");
   } else if (action.type === "skipped") {
-    registrarAccion(`⏭️ sin acción — ${action.reason || "no entendí el comando"}`, "log-sin-accion");
+    registrarAccion(`⏭️ no action — ${action.reason || "command not understood"}`, "log-sin-accion");
   } else if (action.type === "error") {
-    registrarAccion(`⚠️ error: ${action.reason || "fallo desconocido"}`, "log-error");
+    registrarAccion(`⚠️ error: ${action.reason || "unknown failure"}`, "log-error");
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Envío de comandos                                                   */
+/* Sending commands                                                    */
 /* ------------------------------------------------------------------ */
 
-/** Habilita/deshabilita los controles según haya un envío en vuelo. */
+/** Enables/disables the controls while a send is in flight. */
 function fijarControles(enVuelo) {
   ui.micro.disabled = enVuelo || !SR;
   ui.entrada.disabled = enVuelo;
@@ -287,7 +287,7 @@ function fijarControles(enVuelo) {
   ui.micro.classList.toggle("pensando", enVuelo);
 }
 
-/** POST /api/voice-command con guarda anti doble envío y guards de JSON. */
+/** POST /api/voice-command with an anti double-send guard and JSON guards. */
 async function enviarComando(texto) {
   const limpio = texto.trim();
   if (!limpio || enviando) return;
@@ -309,7 +309,7 @@ async function enviarComando(texto) {
     registrarAction(respuesta.datos.action);
   } else {
     ocultarTiming();
-    const motivo = respuesta.datos?.error || "no hubo respuesta del backend";
+    const motivo = respuesta.datos?.error || "no response from the backend";
     registrarAccion(`⚠️ error: ${motivo}`, "log-error");
   }
 
@@ -317,7 +317,7 @@ async function enviarComando(texto) {
   fijarControles(false);
 }
 
-/** Envío desde el campo de texto (botón o Enter). */
+/** Sends from the text field (button or Enter). */
 function enviarDesdeTexto() {
   const texto = ui.entrada.value;
   ui.entrada.value = "";
@@ -325,15 +325,15 @@ function enviarDesdeTexto() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Micrófono (webkitSpeechRecognition)                                 */
+/* Microphone (webkitSpeechRecognition)                                */
 /* ------------------------------------------------------------------ */
 
-/** Configura el reconocedor; si el navegador no lo soporta, degrada a texto. */
+/** Configures the recognizer; browsers without support degrade to text. */
 function configurarMicrofono() {
   if (!SR) {
     ui.micro.disabled = true;
-    ui.micro.title = "tu navegador no soporta reconocimiento de voz — usá el texto";
-    ui.microHint.textContent = "tu navegador no soporta reconocimiento de voz — usá el texto";
+    ui.micro.title = "your browser doesn't support speech recognition — use text instead";
+    ui.microHint.textContent = "your browser doesn't support speech recognition — use text instead";
     ui.microHint.classList.add("alerta");
     return;
   }
@@ -341,22 +341,22 @@ function configurarMicrofono() {
   ui.micro.addEventListener("click", alAlternarMicrofono);
 }
 
-/** Alterna grabar / detener. */
+/** Toggles recording / stopping. */
 function alAlternarMicrofono() {
   if (grabando) {
-    reconocimiento.stop(); // onend se encarga de cerrar el estado visual.
+    reconocimiento.stop(); // onend closes the visual state.
     return;
   }
   iniciarEscucha();
 }
 
-/** Arranca una nueva escucha (es-ES, con resultados interinos). */
+/** Starts a new listening session (en-US, with interim results). */
 function iniciarEscucha() {
   transcripcionFinal = "";
   pintarTranscripcion("");
 
   reconocimiento = new SR();
-  reconocimiento.lang = "es-ES";
+  reconocimiento.lang = "en-US";
   reconocimiento.interimResults = true;
   reconocimiento.continuous = false;
 
@@ -366,16 +366,16 @@ function iniciarEscucha() {
 
   grabando = true;
   ui.micro.classList.add("grabando");
-  ui.microHint.textContent = "grabando… hablá ahora (te escucho en es-ES)";
+  ui.microHint.textContent = "recording… speak now (listening in en-US)";
   try {
     reconocimiento.start();
   } catch {
-    // start() puede fallar si el navegador lo rechaza (permisos, etc.).
+    // start() can fail if the browser rejects it (permissions, etc.).
     alFinEscucha();
   }
 }
 
-/** Vuelca resultados parciales/finales al panel "Lo que dije". */
+/** Dumps partial/final results into the "What I said" panel. */
 function alResultadoVoz(evento) {
   let interino = "";
   for (let i = evento.resultIndex; i < evento.results.length; i += 1) {
@@ -388,7 +388,7 @@ function alResultadoVoz(evento) {
   }
   pintarTranscripcion(interino.trim());
 
-  // Resultado final disponible: se envía de inmediato.
+  // Final result available: send it immediately.
   if (transcripcionFinal && !enviando) {
     const texto = transcripcionFinal;
     transcripcionFinal = "";
@@ -396,43 +396,43 @@ function alResultadoVoz(evento) {
   }
 }
 
-/** Errores del reconocedor (permisos, red, sin habla…). */
+/** Recognizer errors (permissions, network, no speech…). */
 function alErrorVoz(evento) {
   const mensajes = {
-    "not-allowed": "permiso de micrófono denegado — usá el texto",
-    "service-not-allowed": "servicio de voz bloqueado — usá el texto",
-    "no-speech": "no escuché nada — probá de nuevo",
-    network: "error de red del servicio de voz",
+    "not-allowed": "microphone permission denied — use text instead",
+    "service-not-allowed": "speech service blocked — use text instead",
+    "no-speech": "I didn't hear anything — try again",
+    network: "voice service network error",
   };
-  ui.microHint.textContent = mensajes[evento.error] || `error de voz: ${evento.error}`;
+  ui.microHint.textContent = mensajes[evento.error] || `voice error: ${evento.error}`;
   ui.microHint.classList.add("alerta");
 }
 
-/** Cierra el estado visual de grabación. */
+/** Closes the recording visual state. */
 function alFinEscucha() {
   grabando = false;
   ui.micro.classList.remove("grabando");
   if (!enviando) {
-    ui.microHint.textContent = "Pulsá el micro y hablá.";
+    ui.microHint.textContent = "Press the mic and speak.";
     ui.microHint.classList.remove("alerta");
   }
   pintarTranscripcion("");
 }
 
 /* ------------------------------------------------------------------ */
-/* Contador de pods (sondeo /api/status cada 500 ms)                   */
+/* Pod counter (polls /api/status every 500 ms)                        */
 /* ------------------------------------------------------------------ */
 
-/** Pinta el estado de conexión en la pill de la cabecera. */
+/** Paints the connection state in the header pill. */
 function pintarPill(estado, mensaje) {
   ui.pill.className = `pill pill-${estado}`;
   ui.pillTexto.textContent = mensaje;
 }
 
 /**
- * Pinta los pods como cuadraditos dentro de #pod-count, en orden
- * running → starting → terminating. Solo redibuja cuando la firma
- * (running,starting,terminating) cambia: los sondeos idénticos no tocan el DOM.
+ * Paints the pods as squares inside #pod-count, in order
+ * running → starting → terminating. Only redraws when the signature
+ * (running,starting,terminating) changes: identical polls don't touch the DOM.
  */
 function pintarPods(pods) {
   const running = typeof pods?.running === "number" && pods.running >= 0 ? pods.running : 0;
@@ -459,7 +459,7 @@ function pintarPods(pods) {
   }
 }
 
-/** Muestra el placeholder "—" en #pod-count (fallo de backend o de red). */
+/** Shows the "—" placeholder in #pod-count (backend or network failure). */
 function pintarPodsVacios() {
   if (ultimaFirmaPods === null && ui.pods.querySelector(".pods-vacio")) return;
   ultimaFirmaPods = null;
@@ -470,7 +470,7 @@ function pintarPodsVacios() {
   ui.pods.appendChild(vacio);
 }
 
-/** Un ciclo de sondeo: 200 → cuadraditos; 503/red → "—" + pill roja. */
+/** One polling cycle: 200 → squares; 503/network → "—" + red pill. */
 async function consultarEstado() {
   const respuesta = await pedirJson("/api/status");
 
@@ -480,23 +480,23 @@ async function consultarEstado() {
       ui.podsDeployment.textContent = deployment;
     }
     pintarPods(pods);
-    ui.podsSubline.textContent = `${listos ?? 0}/${replicas} listos`;
+    ui.podsSubline.textContent = `${listos ?? 0}/${replicas} ready`;
     ui.podsSubline.classList.remove("sin-datos");
     pintarPill("ok", "backend + cluster OK");
   } else {
-    const motivo = respuesta.datos?.error || "sin conexión con el backend";
+    const motivo = respuesta.datos?.error || "no backend connection";
     pintarPodsVacios();
-    ui.podsSubline.textContent = "sin datos del cluster";
+    ui.podsSubline.textContent = "no cluster data";
     ui.podsSubline.classList.add("sin-datos");
     pintarPill("error", motivo);
   }
 }
 
 /* ------------------------------------------------------------------ */
-/* Arranque                                                            */
+/* Startup                                                             */
 /* ------------------------------------------------------------------ */
 
-/** Punto de entrada: cablea eventos y lanza el sondeo periódico. */
+/** Entry point: wires up events and starts the periodic polling. */
 function iniciar() {
   configurarMicrofono();
   fijarControles(false);

@@ -2,7 +2,7 @@
   "name": "jev-kubectl-voice",
   "version": "0.1.0",
   "private": true,
-  "description": "Demo de conferencia: clasificación de transcripciones de voz en español con Jev (TypeSafe AI) y escalado de un despliegue nginx en Kubernetes.",
+  "description": "Conference demo: classification of English voice transcripts with Jev (TypeSafe AI) and scaling of an nginx deployment in Kubernetes.",
   "type": "module",
   "engines": {
     "node": ">=22"
