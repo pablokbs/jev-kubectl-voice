@@ -1,7 +1,7 @@
 /*
- * Demo en vivo: tema oscuro, contraste muy alto y tipografía enorme para
- * proyectar en un escenario. Una sola vista, sin scroll a 1080p.
- * Sin fuentes ni recursos externos: solo fuentes del sistema.
+ * Live demo: dark theme, very high contrast and enormous typography for
+ * projecting on a stage. A single view, no scroll at 1080p.
+ * No external fonts or resources: system fonts only.
  */
 
 :root {
@@ -26,7 +26,7 @@ html,
 body {
   height: 100%;
   margin: 0;
-  overflow: hidden; /* una sola pantalla, nada de scroll en el escenario */
+  overflow: hidden; /* single screen, no scrolling on stage */
 }
 
 body {
@@ -42,7 +42,7 @@ body {
   font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 }
 
-/* ---------- Cabecera ---------- */
+/* ---------- Header ---------- */
 
 .cabecera {
   display: flex;
@@ -72,7 +72,7 @@ body {
   max-width: 44vw;
 }
 
-/* Los mensajes de error del backend pueden ser largos: se recortan. */
+/* Backend error messages can be long: they get truncated. */
 .pill span:last-child {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -111,7 +111,7 @@ body {
   box-shadow: 0 0 10px rgba(255, 77, 94, 0.8);
 }
 
-/* ---------- Grilla principal ---------- */
+/* ---------- Main grid ---------- */
 
 .principal {
   flex: 1;
@@ -146,7 +146,7 @@ body {
   color: var(--tenue);
 }
 
-/* ---------- Micrófono ---------- */
+/* ---------- Microphone ---------- */
 
 .panel-micro {
   display: flex;
@@ -184,14 +184,14 @@ body {
   cursor: not-allowed;
 }
 
-/* Grabando: rojo pulsante, visible desde el fondo del salón */
+/* Recording: pulsing red, visible from the back of the room */
 .micro.grabando {
   border-color: var(--rojo);
   background: linear-gradient(180deg, #3a1220, #1c0a12);
   animation: pulsoMicro 1.1s ease-in-out infinite;
 }
 
-/* Esperando respuesta del backend: anillo girando */
+/* Waiting for the backend response: spinning ring */
 .micro.pensando {
   border-color: var(--ambar);
   position: relative;
@@ -271,7 +271,7 @@ body {
   color: var(--ambar);
 }
 
-/* ---------- Transcripción ---------- */
+/* ---------- Transcript ---------- */
 
 .panel-transcripcion {
   flex: 1;
@@ -301,7 +301,7 @@ body {
   animation: latido 1s ease-in-out infinite;
 }
 
-/* ---------- Pensamiento de Jev ---------- */
+/* ---------- Jev's thinking ---------- */
 
 .panel-pensamiento {
   flex: 1.15;
@@ -318,7 +318,7 @@ body {
   min-height: 0;
 }
 
-/* Estado "pensando…": todo el panel respira suave */
+/* "thinking…" state: the whole panel breathes softly */
 .pensamiento.pensando {
   animation: respirar 1.1s ease-in-out infinite;
 }
@@ -374,8 +374,8 @@ body {
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Color por nivel de tráfico */
-.opcion-relleno.nivel-bajo {
+/* Color per traffic level */
+.opcion-relleno.nivel-low {
   background: linear-gradient(90deg, #1c6fd1, #55a8ff);
 }
 
@@ -383,27 +383,27 @@ body {
   background: linear-gradient(90deg, #128a53, #2fe089);
 }
 
-.opcion-relleno.nivel-alto {
+.opcion-relleno.nivel-high {
   background: linear-gradient(90deg, #d1622c, #ff9d4d);
 }
 
-.opcion-relleno.nivel-no_se {
+.opcion-relleno.nivel-unsure {
   background: linear-gradient(90deg, #6f4fc4, #b18cff);
 }
 
-/* Barras perdedoras se apagan un poco */
+/* Losing bars dim a bit */
 .opcion:not(.ganadora) .opcion-relleno {
   opacity: 0.55;
 }
 
-/* Confianza: porcentaje grande + barra con marca de umbral en 50% */
+/* Confidence: big percentage + bar with the 50% threshold marker */
 .confianza {
   margin-top: 8px;
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
   gap: 18px;
-  padding-bottom: 1.5rem; /* lugar para la nota "umbral 50%" */
+  padding-bottom: 1.5rem; /* room for the "threshold 50%" note */
 }
 
 .confianza-valor {
@@ -414,7 +414,7 @@ body {
   white-space: nowrap;
 }
 
-/* Confianza bajo el umbral (0.5): tenue, Jev no está seguro */
+/* Confidence below the threshold (0.5): dim, Jev is not sure */
 .confianza-valor.baja {
   color: var(--tenue);
 }
@@ -431,15 +431,15 @@ body {
   height: 100%;
   width: 0%;
   border-radius: 8px;
-  background: linear-gradient(90deg, #d1622c, #ffb84d, #2fe089); /* sensación rojo → verde */
+  background: linear-gradient(90deg, #d1622c, #ffb84d, #2fe089); /* red → green feel */
   transition: width 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .confianza-relleno.baja {
-  background: linear-gradient(90deg, #55637a, #8fa0b8); /* apagada bajo el umbral */
+  background: linear-gradient(90deg, #55637a, #8fa0b8); /* muted below the threshold */
 }
 
-/* Marca del umbral al 50% */
+/* Threshold marker at 50% */
 .confianza-umbral {
   position: absolute;
   top: -4px;
@@ -461,7 +461,7 @@ body {
   white-space: nowrap;
 }
 
-/* Línea de timing: "⚡ Jev decidió en N ms", discreta bajo la confianza */
+/* Timing line: "⚡ Jev decided in N ms", discreet under the confidence */
 .jev-timing {
   margin: 6px 0 0;
   color: var(--ambar);
@@ -476,7 +476,7 @@ body {
   display: none;
 }
 
-/* ---------- Contador de pods (cuadraditos) ---------- */
+/* ---------- Pod counter (squares) ---------- */
 
 .panel-pods {
   flex: 1;
@@ -493,8 +493,8 @@ body {
 }
 
 /*
- * Cuadrícula de pods: un cuadrado por pod. min-height estable para que pasar
- * de 3 a 10 réplicas (misma fila) no sacuda el layout del proyector.
+ * Pod grid: one square per pod. Stable min-height so going from 3 to 10
+ * replicas (same row) does not shake the projector layout.
  */
 .pods-cuadricula {
   width: 100%;
@@ -519,7 +519,7 @@ body {
   box-shadow: 0 0 18px rgba(61, 220, 132, 0.4);
 }
 
-/* Arrancando: naranja con latido sutil de brillo, visible desde el salón. */
+/* Starting: orange with a subtle glow pulse, visible from the room. */
 .pod-square--starting {
   background: #ffab2e;
   box-shadow: 0 0 18px rgba(255, 171, 46, 0.4);
@@ -531,7 +531,7 @@ body {
   box-shadow: 0 0 18px rgba(255, 82, 82, 0.4);
 }
 
-/* Placeholder "—" cuando no hay datos del cluster. */
+/* "—" placeholder when there is no cluster data. */
 .pods-vacio {
   font-size: clamp(2rem, 4vw, 3.5rem);
   font-weight: 800;
@@ -539,7 +539,7 @@ body {
   line-height: 1;
 }
 
-/* Leyenda: cuadradito de color + etiqueta, junto a la cuadrícula. */
+/* Legend: colored square + label, next to the grid. */
 .pods-leyenda {
   display: flex;
   justify-content: center;
@@ -561,7 +561,7 @@ body {
   height: 13px;
   border-radius: 3px;
   flex: none;
-  animation: none; /* los chips de la leyenda no laten ni aparecen con pop */
+  animation: none; /* legend chips do not pulse or pop in */
 }
 
 .pods-subline {
@@ -577,7 +577,7 @@ body {
   color: var(--rojo);
 }
 
-/* ---------- Registro de acciones ---------- */
+/* ---------- Action log ---------- */
 
 .panel-log {
   flex: none;
@@ -620,7 +620,7 @@ body {
   color: var(--rojo);
 }
 
-/* ---------- Pie ---------- */
+/* ---------- Footer ---------- */
 
 .pie {
   flex: none;
@@ -629,7 +629,7 @@ body {
   font-size: 1.05rem;
 }
 
-/* ---------- Estados vacíos ---------- */
+/* ---------- Empty states ---------- */
 
 .vacio {
   color: var(--tenue);
@@ -638,7 +638,7 @@ body {
   font-style: italic;
 }
 
-/* ---------- Animaciones ---------- */
+/* ---------- Animations ---------- */
 
 @keyframes pulsoMicro {
   0%,

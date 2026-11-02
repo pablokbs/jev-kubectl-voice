@@ -1,9 +1,9 @@
 /**
- * Tests del servidor HTTP (`createVoiceServer`) con clasificador y runner de
- * kubectl falsos inyectados: sin kubectl real, sin red más allá de localhost.
+ * Tests of the HTTP server (`createVoiceServer`) with fake injected
+ * classifier and kubectl runner: no real kubectl, no network beyond localhost.
  *
- * Cada test arranca un servidor real en 127.0.0.1:0 (puerto efímero) y habla
- * con él vía `fetch`, cerrándolo al terminar.
+ * Each test starts a real server on 127.0.0.1:0 (ephemeral port) and talks to
+ * it via `fetch`, closing it when done.
  */
 
 import assert from "node:assert/strict";
@@ -20,7 +20,7 @@ import type { Classifier, JevClassification } from "./jev.js";
 import { KubectlError } from "./kubectl.js";
 import type { KubectlRunner } from "./kubectl.js";
 
-/** Config de pruebas: mismo despliegue que la demo, sin efectos reales. */
+/** Test config: same deployment as the demo, no real effects. */
 const TEST_CFG: ServerConfig = {
   port: 0,
   confidenceThreshold: 0.5,
@@ -31,22 +31,22 @@ const TEST_CFG: ServerConfig = {
   jevMock: true,
 };
 
-/** Clasificación falsa con la etiqueta dada al confidence dado. */
+/** Fake classification with the given label at the given confidence. */
 function classificationOf(choice: JevClassification["choice"], confidence: number): JevClassification {
   return { choice, confidence, probabilities: { [choice]: confidence } };
 }
 
-/** Espera pasiva de `ms` milisegundos (para clasificadores falsos lentos). */
+/** Passive wait of `ms` milliseconds (for slow fake classifiers). */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** JSON realista de `kubectl get deployment -o json` para el runner falso. */
+/** Realistic `kubectl get deployment -o json` JSON for the fake runner. */
 function deploymentJson(replicas: number, ready: number): string {
   return JSON.stringify({ kind: "Deployment", spec: { replicas }, status: { readyReplicas: ready } });
 }
 
-/** Clasificador falso: registra las llamadas y responde (o lanza) lo dado. */
+/** Fake classifier: records the calls and answers (or throws) as given. */
 function fakeClassifier(result: JevClassification | Error) {
   const calls: Array<{ text: string; currentReplicas: number }> = [];
   const classifier: Classifier = {
@@ -60,9 +60,9 @@ function fakeClassifier(result: JevClassification | Error) {
 }
 
 /**
- * Runner de kubectl falso, programable por verbo: el primer `get` responde
- * `firstGet`, el segundo `secondGet` (o `firstGet` si no se dio); `scale`
- * responde `scale`. Los valores Error se lanzan tal cual (forma execFile).
+ * Fake kubectl runner, programmable per verb: the first `get` answers
+ * `firstGet`, the second `secondGet` (or `firstGet` if not given); `scale`
+ * answers `scale`. Error values are thrown as-is (execFile shape).
  */
 function fakeKubectl(options: {
   firstGet?: string | Error;
@@ -83,12 +83,12 @@ function fakeKubectl(options: {
       if (options.scale instanceof Error) throw options.scale;
       return { stdout: options.scale ?? "deployment.apps/nginx-voice scaled", stderr: "" };
     }
-    throw new Error(`comando inesperado: ${args.join(" ")}`);
+    throw new Error(`unexpected command: ${args.join(" ")}`);
   };
   return { runner, calls };
 }
 
-/** Servidor arrancado en 127.0.0.1:0 con su puerto y su cierre ordenado. */
+/** Server booted on 127.0.0.1:0 with its port and graceful close. */
 interface Booted {
   server: http.Server;
   port: number;
@@ -100,7 +100,7 @@ async function boot(options: ServerOptions): Promise<Booted> {
   const server = createVoiceServer(options);
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", () => resolve()));
   const address = server.address();
-  assert.ok(address !== null && typeof address === "object", "debe escuchar en un puerto efímero");
+  assert.ok(address !== null && typeof address === "object", "must listen on an ephemeral port");
   const port = address.port;
   return {
     server,
@@ -115,7 +115,7 @@ async function boot(options: ServerOptions): Promise<Booted> {
   };
 }
 
-/** Arranca, ejecuta y cierra siempre, aunque el test falle. */
+/** Boots, runs and always closes, even if the test fails. */
 async function withServer(options: ServerOptions, run: (booted: Booted) => Promise<void>): Promise<void> {
   const booted = await boot(options);
   try {
@@ -125,7 +125,7 @@ async function withServer(options: ServerOptions, run: (booted: Booted) => Promi
   }
 }
 
-/** Opciones estándar de prueba con inyecciones por defecto. */
+/** Standard test options with default injections. */
 function serverOptions(
   overrides: {
     classifier: Classifier;
@@ -138,7 +138,7 @@ function serverOptions(
   return { cfg: TEST_CFG, settleDelayMs: 1, ...overrides };
 }
 
-/** POST de ayuda con cuerpo JSON. */
+/** POST helper with a JSON body. */
 function postCommand(base: string, body: string | undefined): Promise<Response> {
   return fetch(`${base}/api/voice-command`, {
     method: "POST",
@@ -147,7 +147,7 @@ function postCommand(base: string, body: string | undefined): Promise<Response> 
   });
 }
 
-/** Directorio temporal que hace de `public/`, con archivos opcionales. */
+/** Temp directory acting as `public/`, with optional files. */
 async function makePublicDir(files: Record<string, string> = {}): Promise<string> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "jev-public-"));
   for (const [name, content] of Object.entries(files)) {
@@ -157,21 +157,21 @@ async function makePublicDir(files: Record<string, string> = {}): Promise<string
 }
 
 describe("POST /api/voice-command", () => {
-  it("escala a la réplicas del nivel alto y confirma réplicas antes y después", async () => {
-    const { classifier, calls: classifierCalls } = fakeClassifier(classificationOf("alto", 0.92));
+  it("scales to the high level's replicas and confirms replicas before and after", async () => {
+    const { classifier, calls: classifierCalls } = fakeClassifier(classificationOf("high", 0.92));
     const { runner, calls } = fakeKubectl({
       firstGet: deploymentJson(3, 2),
       secondGet: deploymentJson(10, 10),
     });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "tenemos mucho tráfico" }));
+      const response = await postCommand(base, JSON.stringify({ text: "we have heavy traffic" }));
       assert.equal(response.status, 200);
       assert.match(response.headers.get("content-type") ?? "", /application\/json/);
       const body = (await response.json()) as VoiceCommandResponse;
-      assert.equal(body.transcript, "tenemos mucho tráfico");
+      assert.equal(body.transcript, "we have heavy traffic");
       assert.deepEqual(body.classification, {
-        choice: "alto",
-        probabilities: { alto: 0.92 },
+        choice: "high",
+        probabilities: { high: 0.92 },
         confidence: 0.92,
       });
       assert.deepEqual(body.action, {
@@ -181,7 +181,7 @@ describe("POST /api/voice-command", () => {
       });
       assert.ok(typeof body.timings.classify_ms === "number");
       assert.ok(body.timings.classify_ms >= 0);
-      assert.deepEqual(classifierCalls, [{ text: "tenemos mucho tráfico", currentReplicas: 3 }]);
+      assert.deepEqual(classifierCalls, [{ text: "we have heavy traffic", currentReplicas: 3 }]);
       assert.deepEqual(
         calls.filter((args) => args[0] === "scale"),
         [["scale", "deployment", "nginx-voice", "-n", "default", "--replicas=10"]],
@@ -189,11 +189,11 @@ describe("POST /api/voice-command", () => {
     });
   });
 
-  it("omite el ajuste con no_se y nunca llama a kubectl scale", async () => {
-    const { classifier } = fakeClassifier(classificationOf("no_se", 0.99));
+  it("skips the adjustment with unsure and never calls kubectl scale", async () => {
+    const { classifier } = fakeClassifier(classificationOf("unsure", 0.99));
     const { runner, calls } = fakeKubectl({ firstGet: deploymentJson(3, 3) });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "no estoy seguro" }));
+      const response = await postCommand(base, JSON.stringify({ text: "I'm not sure" }));
       assert.equal(response.status, 200);
       const body = (await response.json()) as VoiceCommandResponse;
       assert.deepEqual(body.action, {
@@ -202,38 +202,38 @@ describe("POST /api/voice-command", () => {
         replicas_after: null,
         reason: body.action.reason,
       });
-      assert.match(body.action.reason ?? "", /no_se/);
-      assert.equal(body.classification.choice, "no_se");
+      assert.match(body.action.reason ?? "", /unsure/);
+      assert.equal(body.classification.choice, "unsure");
       assert.ok(typeof body.timings.classify_ms === "number");
       assert.ok(body.timings.classify_ms >= 0);
       assert.equal(calls.some((args) => args[0] === "scale"), false);
     });
   });
 
-  it("mide classify_ms con un clasificador lento y total_ms >= classify_ms", async () => {
-    const lento: Classifier = {
+  it("measures classify_ms with a slow classifier and total_ms >= classify_ms", async () => {
+    const slow: Classifier = {
       async classify() {
         await sleep(100);
-        return classificationOf("alto", 0.92);
+        return classificationOf("high", 0.92);
       },
     };
     const { runner } = fakeKubectl({
       firstGet: deploymentJson(3, 2),
       secondGet: deploymentJson(10, 10),
     });
-    await withServer(serverOptions({ classifier: lento, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "mucho tráfico" }));
+    await withServer(serverOptions({ classifier: slow, kubectlRunner: runner }), async ({ base }) => {
+      const response = await postCommand(base, JSON.stringify({ text: "heavy traffic" }));
       assert.equal(response.status, 200);
       const body = (await response.json()) as VoiceCommandResponse;
-      assert.equal(body.classification.choice, "alto");
+      assert.equal(body.classification.choice, "high");
       assert.ok(typeof body.timings.classify_ms === "number");
       assert.ok(
         body.timings.classify_ms >= 50,
-        `classify_ms=${body.timings.classify_ms}, esperado >= 50 (clasificador de ~100 ms)`,
+        `classify_ms=${body.timings.classify_ms}, expected >= 50 (~100 ms classifier)`,
       );
       assert.ok(
         body.timings.total_ms >= body.timings.classify_ms,
-        `total_ms=${body.timings.total_ms} debe cubrir classify_ms=${body.timings.classify_ms}`,
+        `total_ms=${body.timings.total_ms} must cover classify_ms=${body.timings.classify_ms}`,
       );
       assert.deepEqual(Object.keys(body), [
         "transcript",
@@ -244,27 +244,27 @@ describe("POST /api/voice-command", () => {
     });
   });
 
-  it("omite el ajuste cuando la confianza queda por debajo del umbral", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.3));
+  it("skips the adjustment when the confidence is below the threshold", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.3));
     const { runner, calls } = fakeKubectl({ firstGet: deploymentJson(3, 3) });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "mucho tráfico" }));
+      const response = await postCommand(base, JSON.stringify({ text: "heavy traffic" }));
       assert.equal(response.status, 200);
       const body = (await response.json()) as VoiceCommandResponse;
       assert.equal(body.action.type, "skipped");
-      assert.match(body.action.reason ?? "", /por debajo del umbral/);
+      assert.match(body.action.reason ?? "", /below the threshold/);
       assert.equal(calls.some((args) => args[0] === "scale"), false);
     });
   });
 
-  it("usa 0 réplicas para el clasificador y null como réplicas previas cuando el get inicial falla", async () => {
-    const { classifier, calls: classifierCalls } = fakeClassifier(classificationOf("alto", 0.92));
+  it("uses 0 replicas for the classifier and null as previous replicas when the initial get fails", async () => {
+    const { classifier, calls: classifierCalls } = fakeClassifier(classificationOf("high", 0.92));
     const { runner } = fakeKubectl({
-      firstGet: new Error("cluster caído"),
+      firstGet: new Error("cluster down"),
       secondGet: deploymentJson(10, 10),
     });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "mucho tráfico" }));
+      const response = await postCommand(base, JSON.stringify({ text: "heavy traffic" }));
       assert.equal(response.status, 200);
       const body = (await response.json()) as VoiceCommandResponse;
       assert.deepEqual(body.action, {
@@ -272,127 +272,127 @@ describe("POST /api/voice-command", () => {
         replicas_before: null,
         replicas_after: 10,
       });
-      assert.deepEqual(classifierCalls, [{ text: "mucho tráfico", currentReplicas: 0 }]);
+      assert.deepEqual(classifierCalls, [{ text: "heavy traffic", currentReplicas: 0 }]);
     });
   });
 
-  it("devuelve 200 con action.type 'error' cuando kubectl scale falla, conservando la clasificación", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.92));
+  it("returns 200 with action.type 'error' when kubectl scale fails, keeping the classification", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.92));
     const { runner } = fakeKubectl({
       firstGet: deploymentJson(3, 2),
       scale: new KubectlError("kubectl_failed", "connection refused"),
     });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "mucho tráfico" }));
+      const response = await postCommand(base, JSON.stringify({ text: "heavy traffic" }));
       assert.equal(response.status, 200);
       const body = (await response.json()) as VoiceCommandResponse;
       assert.equal(body.action.type, "error");
       assert.equal(body.action.replicas_before, 3);
       assert.equal(body.action.replicas_after, null);
-      assert.match(body.action.reason ?? "", /No se pudo escalar/);
+      assert.match(body.action.reason ?? "", /Could not scale/);
       assert.match(body.action.reason ?? "", /connection refused/);
-      assert.equal(body.classification.choice, "alto");
-      assert.equal(body.transcript, "mucho tráfico");
+      assert.equal(body.classification.choice, "high");
+      assert.equal(body.transcript, "heavy traffic");
     });
   });
 
-  it("devuelve 200 con action.type 'error' cuando no se puede confirmar el estado tras escalar", async () => {
+  it("returns 200 with action.type 'error' when the state cannot be confirmed after scaling", async () => {
     const { classifier } = fakeClassifier(classificationOf("normal", 0.9));
     const { runner, calls } = fakeKubectl({
       firstGet: deploymentJson(3, 2),
-      secondGet: new Error("get tardó demasiado"),
+      secondGet: new Error("get timed out"),
     });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "tráfico normal" }));
+      const response = await postCommand(base, JSON.stringify({ text: "traffic normal" }));
       assert.equal(response.status, 200);
       const body = (await response.json()) as VoiceCommandResponse;
       assert.equal(body.action.type, "error");
       assert.equal(body.action.replicas_after, null);
-      assert.match(body.action.reason ?? "", /no se pudo confirmar/);
+      assert.match(body.action.reason ?? "", /could not be confirmed/);
       assert.equal(body.classification.choice, "normal");
-      assert.equal(calls.some((args) => args[0] === "scale"), true, "el scale sí se envió");
+      assert.equal(calls.some((args) => args[0] === "scale"), true, "the scale was indeed sent");
     });
   });
 
-  it("devuelve 502 con error en español cuando el clasificador falla, sin escalar", async () => {
-    const { classifier } = fakeClassifier(new Error("Jev fuera de servicio"));
+  it("returns 502 with an English error when the classifier fails, without scaling", async () => {
+    const { classifier } = fakeClassifier(new Error("Jev is down"));
     const { runner, calls } = fakeKubectl({ firstGet: deploymentJson(3, 2) });
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ text: "mucho tráfico" }));
+      const response = await postCommand(base, JSON.stringify({ text: "heavy traffic" }));
       assert.equal(response.status, 502);
       const body = (await response.json()) as { error: string };
-      assert.match(body.error, /No se pudo clasificar/);
-      assert.match(body.error, /Jev fuera de servicio/);
+      assert.match(body.error, /Could not classify/);
+      assert.match(body.error, /Jev is down/);
       assert.equal(calls.some((args) => args[0] === "scale"), false);
     });
   });
 
-  it("rechaza con 400 un cuerpo vacío", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("rejects an empty body with 400", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     await withServer(serverOptions({ classifier }), async ({ base }) => {
       const response = await postCommand(base, undefined);
       assert.equal(response.status, 400);
       const body = (await response.json()) as { error: string };
-      assert.ok(body.error.length > 0, "el error debe tener mensaje en español");
+      assert.ok(body.error.length > 0, "the error must have a message in English");
     });
   });
 
-  it("rechaza con 400 cuando falta el campo text", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("rejects with 400 when the text field is missing", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     await withServer(serverOptions({ classifier }), async ({ base }) => {
-      const response = await postCommand(base, JSON.stringify({ otro: 1 }));
+      const response = await postCommand(base, JSON.stringify({ other: 1 }));
       assert.equal(response.status, 400);
       const body = (await response.json()) as { error: string };
       assert.match(body.error, /text/);
     });
   });
 
-  it("rechaza con 400 cuando text no es una cadena", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("rejects with 400 when text is not a string", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     await withServer(serverOptions({ classifier }), async ({ base }) => {
       const response = await postCommand(base, JSON.stringify({ text: 42 }));
       assert.equal(response.status, 400);
       const body = (await response.json()) as { error: string };
-      assert.match(body.error, /cadena/);
+      assert.match(body.error, /string/);
     });
   });
 
-  it("rechaza con 400 cuando text está vacío", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("rejects with 400 when text is empty", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     await withServer(serverOptions({ classifier }), async ({ base }) => {
       const response = await postCommand(base, JSON.stringify({ text: "   " }));
       assert.equal(response.status, 400);
       const body = (await response.json()) as { error: string };
-      assert.match(body.error, /no puede estar vacío/);
+      assert.match(body.error, /cannot be empty/);
     });
   });
 
-  it("rechaza con 400 un cuerpo que no es JSON válido", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("rejects with 400 a body that is not valid JSON", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     await withServer(serverOptions({ classifier }), async ({ base }) => {
-      const response = await postCommand(base, "esto no es json");
+      const response = await postCommand(base, "this is not json");
       assert.equal(response.status, 400);
       const body = (await response.json()) as { error: string };
       assert.match(body.error, /JSON/);
     });
   });
 
-  it("responde 413 cuando el cuerpo supera los 10 KB, sin tocar kubectl", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("responds 413 when the body exceeds 10 KB, without touching kubectl", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const { runner, calls } = fakeKubectl({});
     await withServer(serverOptions({ classifier, kubectlRunner: runner }), async ({ base }) => {
       const response = await postCommand(base, JSON.stringify({ text: "a".repeat(11 * 1024) }));
       assert.equal(response.status, 413);
       const body = (await response.json()) as { error: string };
       assert.match(body.error, /10 KB/);
-      assert.equal(calls.length, 0, "ninguna llamada a kubectl con cuerpo demasiado grande");
+      assert.equal(calls.length, 0, "no kubectl call with an oversized body");
     });
   });
 });
 
 describe("GET /api/status", () => {
-  it("devuelve el estado del despliegue con el desglose de pods del lector inyectado", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("returns the deployment state with the pod breakdown of the injected reader", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const { runner } = fakeKubectl({ firstGet: deploymentJson(3, 2) });
     const readerCalls: Array<{ podSelector: string; namespace: string }> = [];
     await withServer(
@@ -426,15 +426,15 @@ describe("GET /api/status", () => {
     );
   });
 
-  it("devuelve 503 con réplicas null y pods en ceros cuando kubectl falla", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
-    const { runner } = fakeKubectl({ firstGet: new KubectlError("kubectl_failed", "no hay clúster") });
+  it("returns 503 with null replicas and zeroed pods when kubectl fails", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
+    const { runner } = fakeKubectl({ firstGet: new KubectlError("kubectl_failed", "no cluster") });
     await withServer(
       serverOptions({
         classifier,
         kubectlRunner: runner,
-        // Aunque el lector de pods tenga datos, el fallo del despliegue manda:
-        // la forma del cuerpo 503 debe ser constante para el frontend.
+        // Even if the pod reader has data, the deployment failure wins:
+        // the 503 body shape must stay constant for the frontend.
         podStatesReader: async () => ({ running: 5, starting: 0, terminating: 0 }),
       }),
       async ({ base }) => {
@@ -451,21 +451,21 @@ describe("GET /api/status", () => {
         assert.equal(body.replicas, null);
         assert.equal(body.ready_replicas, null);
         assert.deepEqual(body.pods, { running: 0, starting: 0, terminating: 0 });
-        assert.match(body.error, /No se pudo consultar/);
-        assert.match(body.error, /no hay clúster/);
+        assert.match(body.error, /Could not query/);
+        assert.match(body.error, /no cluster/);
       },
     );
   });
 
-  it("devuelve 503 con pods en ceros cuando el lector de pods falla", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("returns 503 with zeroed pods when the pod reader fails", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const { runner } = fakeKubectl({ firstGet: deploymentJson(3, 2) });
     await withServer(
       serverOptions({
         classifier,
         kubectlRunner: runner,
         podStatesReader: async () => {
-          throw new KubectlError("kubectl_failed", "lista de pods rota");
+          throw new KubectlError("kubectl_failed", "broken pod list");
         },
       }),
       async ({ base }) => {
@@ -482,13 +482,13 @@ describe("GET /api/status", () => {
   });
 });
 
-describe("rutas y estáticos", () => {
-  it("devuelve 404 JSON para rutas desconocidas", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+describe("routes and static files", () => {
+  it("returns JSON 404 for unknown routes", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const publicDir = await makePublicDir();
     try {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
-        const response = await fetch(`${base}/api/desconocida`);
+        const response = await fetch(`${base}/api/unknown`);
         assert.equal(response.status, 404);
         assert.match(response.headers.get("content-type") ?? "", /application\/json/);
         const body = (await response.json()) as { error: string };
@@ -499,8 +499,8 @@ describe("rutas y estáticos", () => {
     }
   });
 
-  it("devuelve 404 con método incorrecto en una ruta conocida", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("returns 404 with the wrong method on a known route", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const publicDir = await makePublicDir();
     try {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
@@ -514,8 +514,8 @@ describe("rutas y estáticos", () => {
     }
   });
 
-  it("sirve una página de reserva en / cuando no existe public/index.html", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("serves a placeholder page at / when public/index.html does not exist", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const publicDir = await makePublicDir();
     try {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
@@ -524,17 +524,17 @@ describe("rutas y estáticos", () => {
         assert.match(response.headers.get("content-type") ?? "", /text\/html/);
         const html = await response.text();
         assert.match(html, /<!doctype html>/i);
-        assert.match(html, /fase 2/, "la página de reserva menciona la fase 2");
+        assert.match(html, /phase 2/, "the placeholder page mentions phase 2");
       });
     } finally {
       await fs.rm(publicDir, { recursive: true, force: true });
     }
   });
 
-  it("sirve index.html, css y js desde public/ con el content-type correcto", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("serves index.html, css and js from public/ with the correct content type", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const publicDir = await makePublicDir({
-      "index.html": "<h1>hola desde public</h1>",
+      "index.html": "<h1>hello from public</h1>",
       "style.css": "body { color: red; }",
       "app.js": "console.log('demo');",
     });
@@ -542,7 +542,7 @@ describe("rutas y estáticos", () => {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
         const home = await fetch(`${base}/`);
         assert.equal(home.status, 200);
-        assert.equal(await home.text(), "<h1>hola desde public</h1>");
+        assert.equal(await home.text(), "<h1>hello from public</h1>");
         assert.match(home.headers.get("content-type") ?? "", /text\/html/);
 
         const explicit = await fetch(`${base}/index.html`);
@@ -561,12 +561,12 @@ describe("rutas y estáticos", () => {
     }
   });
 
-  it("devuelve 404 para estáticos inexistentes", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
+  it("returns 404 for missing static files", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
     const publicDir = await makePublicDir();
     try {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
-        const response = await fetch(`${base}/no-existe.css`);
+        const response = await fetch(`${base}/missing.css`);
         assert.equal(response.status, 404);
         const body = (await response.json()) as { error: string };
         assert.ok(body.error.length > 0);
@@ -576,12 +576,12 @@ describe("rutas y estáticos", () => {
     }
   });
 
-  it("devuelve 404 para extensiones sin tipo conocido", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
-    const publicDir = await makePublicDir({ "notas.txt": "secreto" });
+  it("returns 404 for extensions without a known content type", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
+    const publicDir = await makePublicDir({ "notes.txt": "secret" });
     try {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
-        const response = await fetch(`${base}/notas.txt`);
+        const response = await fetch(`${base}/notes.txt`);
         assert.equal(response.status, 404);
       });
     } finally {
@@ -589,13 +589,13 @@ describe("rutas y estáticos", () => {
     }
   });
 
-  it("bloquea el path traversal fuera de public/", async () => {
-    const { classifier } = fakeClassifier(classificationOf("alto", 0.9));
-    const publicDir = await makePublicDir({ "index.html": "<h1>hola</h1>" });
+  it("blocks path traversal outside public/", async () => {
+    const { classifier } = fakeClassifier(classificationOf("high", 0.9));
+    const publicDir = await makePublicDir({ "index.html": "<h1>hi</h1>" });
     try {
       await withServer(serverOptions({ classifier, publicDir }), async ({ base }) => {
-        // %2F codificado evita que el cliente normalice los puntos: llega tal
-        // cual al servidor, que debe rechazarlo por salir de public/.
+        // %2F encoded keeps the client from normalizing the dots: it reaches
+        // the server as-is, which must reject it for leaving public/.
         const traversal = await fetch(`${base}/x/%2F..%2F..%2Fserver.ts`);
         assert.equal(traversal.status, 404);
         const simple = await fetch(`${base}/../server.ts`);

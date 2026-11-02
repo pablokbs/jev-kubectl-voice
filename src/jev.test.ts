@@ -1,12 +1,11 @@
 /**
- * Tests del dominio de clasificación Jev.
+ * Tests of the Jev classification domain.
  *
- * - `JevClassifier` contra un cliente SDK FALSO inyectado (sin red, sin
- *   importar el `TypeSafeClient` real): verifica el mapeo de la respuesta del
- *   SDK a `JevClassification` y la petición enviada.
- * - `MockClassifier` vía `createClassifier({ jevMock: true })`: frases en
- *   español de la demo.
- * - `createClassifier`: selección de mock/real y error en español sin clave.
+ * - `JevClassifier` against a FAKE injected SDK client (no network, the real
+ *   `TypeSafeClient` is never imported): verifies the SDK response mapping to
+ *   `JevClassification` and the request sent.
+ * - `MockClassifier` via `createClassifier({ jevMock: true })`: English demo phrases.
+ * - `createClassifier`: mock/real selection and the error without a key.
  */
 
 import assert from "node:assert/strict";
@@ -14,33 +13,33 @@ import { afterEach, describe, it } from "node:test";
 import {
   createClassifier,
   JevClassifier,
-  type TraficoChoice,
-  type TraficoSystemOneResult,
+  type TrafficChoice,
+  type TrafficSystemOneResult,
   type TypeSafeSystemOneClient,
 } from "./jev.js";
 import { MockClassifier } from "./mock-jev.js";
 
-/** Cliente SDK falso: registra la petición y devuelve una respuesta fija. */
+/** Fake SDK client: records the request and returns a fixed answer. */
 class FakeSdkClient implements TypeSafeSystemOneClient {
   lastRequest: Parameters<TypeSafeSystemOneClient["systemOne"]>[0] | undefined;
 
   constructor(
     private readonly answer: {
-      choice: TraficoChoice;
+      choice: TrafficChoice;
       confidence: number;
-      probabilities: Record<TraficoChoice, number>;
+      probabilities: Record<TrafficChoice, number>;
     },
   ) {}
 
   systemOne(
     request: Parameters<TypeSafeSystemOneClient["systemOne"]>[0],
-  ): Promise<TraficoSystemOneResult> {
+  ): Promise<TrafficSystemOneResult> {
     this.lastRequest = request;
-    const result: TraficoSystemOneResult = {
+    const result: TrafficSystemOneResult = {
       model: "jev-fake",
       usage: { input_tokens: null, output_tokens: null },
       answers: {
-        trafico: {
+        traffic: {
           type: "choice",
           choice: this.answer.choice,
           confidence: this.answer.confidence,
@@ -53,111 +52,113 @@ class FakeSdkClient implements TypeSafeSystemOneClient {
 }
 
 describe("JevClassifier", () => {
-  it("mapea la respuesta del SDK a JevClassification y envía state y question correctos", async () => {
+  it("maps the SDK response to JevClassification and sends the correct state and question", async () => {
     const fake = new FakeSdkClient({
-      choice: "alto",
+      choice: "high",
       confidence: 0.87,
-      probabilities: { alto: 0.87, normal: 0.07, bajo: 0.04, no_se: 0.02 },
+      probabilities: { high: 0.87, normal: 0.07, low: 0.04, unsure: 0.02 },
     });
     const classifier = new JevClassifier(fake);
 
-    const result = await classifier.classify("hay mucho tráfico", 3);
+    const result = await classifier.classify("we have a lot of traffic", 3);
 
-    // Respuesta normalizada, un objeto plano tipado.
+    // Normalized response, a flat typed object.
     assert.deepStrictEqual(result, {
-      choice: "alto",
-      probabilities: { alto: 0.87, normal: 0.07, bajo: 0.04, no_se: 0.02 },
+      choice: "high",
+      probabilities: { high: 0.87, normal: 0.07, low: 0.04, unsure: 0.02 },
       confidence: 0.87,
     });
 
-    // Petición hacia el SDK: estado con comando y réplicas actuales.
-    assert.ok(fake.lastRequest, "el clasificador debe llamar a systemOne");
+    // Request towards the SDK: state with command and current replicas.
+    assert.ok(fake.lastRequest, "the classifier must call systemOne");
     assert.deepStrictEqual(fake.lastRequest.state, {
-      comando_del_operador: "hay mucho tráfico",
-      replicas_actuales: 3,
+      operator_command: "we have a lot of traffic",
+      current_replicas: 3,
     });
 
-    // Pregunta `choice` de tráfico con las cuatro etiquetas y las instrucciones
-    // que enmarcan la orden del operador (capacidad pedida, no solo tráfico).
-    assert.deepStrictEqual(fake.lastRequest.questions.trafico, {
+    // The traffic `choice` question with the four labels and the instructions
+    // that frame the operator's order (requested capacity, not just traffic).
+    assert.deepStrictEqual(fake.lastRequest.questions.traffic, {
       type: "choice",
       instructions:
-        "Nivel de capacidad que el operador pide para el servicio según su orden: máxima capacidad o mucho tráfico = alto, todo normal = normal, poco uso = bajo",
-      criteria: { bajo: null, normal: null, alto: null, no_se: null },
+        "Capacity level the operator is asking for the service based on their command: maximum capacity or heavy traffic = high, everything normal = normal, light usage = low",
+      criteria: { low: null, normal: null, high: null, unsure: null },
     });
   });
 
-  it("propaga el rechazo del SDK (error de red o de API)", async () => {
+  it("propagates the SDK rejection (network or API error)", async () => {
     const failing: TypeSafeSystemOneClient = {
       systemOne() {
-        return Promise.reject(new Error("fallo de red simulado"));
+        return Promise.reject(new Error("simulated network failure"));
       },
     };
     const classifier = new JevClassifier(failing);
-    await assert.rejects(classifier.classify("mucho tráfico", 3), /fallo de red simulado/);
+    await assert.rejects(classifier.classify("heavy traffic", 3), /simulated network failure/);
   });
 });
 
-describe("createClassifier con jevMock true (MockClassifier)", () => {
+describe("createClassifier with jevMock true (MockClassifier)", () => {
   const classifier = createClassifier({ jevMock: true });
 
-  it("devuelve un MockClassifier", () => {
+  it("returns a MockClassifier", () => {
     assert.ok(classifier instanceof MockClassifier);
   });
 
-  // Tabla: frases de la demo en español → nivel esperado. Incluye los clásicos
-  // de tráfico y las órdenes crudas de la nueva narrativa (héroe → su IA).
-  const phraseCases: ReadonlyArray<{ text: string; choice: TraficoChoice; confidence: number }> = [
-    { text: "tenemos mucho tráfico", choice: "alto", confidence: 0.92 },
-    { text: "el tráfico es normal", choice: "normal", confidence: 0.9 },
-    { text: "hay poco tráfico", choice: "bajo", confidence: 0.9 },
-    { text: "hoy es martes", choice: "no_se", confidence: 0.3 },
-    { text: "pone todo lo que tenemos en el cluster", choice: "alto", confidence: 0.92 },
-    { text: "poné todo lo que tenemos en los propulsores", choice: "alto", confidence: 0.92 },
-    { text: "ya está todo normal", choice: "normal", confidence: 0.9 },
-    // Regresiones de colisión de substrings: "poca potencia" no debe escalar a
-    // alto por la keyword "potencia", y "inestable" no debe matchear "estable".
-    { text: "tenemos poca potencia disponible", choice: "bajo", confidence: 0.9 },
-    { text: "el servicio está inestable", choice: "no_se", confidence: 0.3 },
-    { text: "poca potencia, estamos al horno", choice: "bajo", confidence: 0.9 },
+  // Table: English demo phrases → expected level. Includes the traffic
+  // classics and the raw movie-style orders (hero → their AI).
+  const phraseCases: ReadonlyArray<{ text: string; choice: TrafficChoice; confidence: number }> = [
+    { text: "we have a lot of traffic", choice: "high", confidence: 0.92 },
+    { text: "the traffic is normal", choice: "normal", confidence: 0.9 },
+    { text: "there is little traffic", choice: "low", confidence: 0.9 },
+    { text: "today is tuesday", choice: "unsure", confidence: 0.3 },
+    { text: "put everything we have into the cluster", choice: "high", confidence: 0.92 },
+    { text: "put everything we have into the thrusters", choice: "high", confidence: 0.92 },
+    { text: "everything is back to normal", choice: "normal", confidence: 0.9 },
+    // Substring-collision regressions: "little power" must not scale to high
+    // via the word "power", and "unstable" must not match "stable".
+    { text: "we have little power available", choice: "low", confidence: 0.9 },
+    { text: "the service is unstable", choice: "unsure", confidence: 0.3 },
+    { text: "we have little power, we're toast", choice: "low", confidence: 0.9 },
   ];
 
   for (const { text, choice, confidence } of phraseCases) {
-    it(`clasifica "${text}" como ${choice} (confianza ${confidence})`, async () => {
+    it(`classifies "${text}" as ${choice} (confidence ${confidence})`, async () => {
       const result = await classifier.classify(text, 3);
       assert.equal(result.choice, choice);
       assert.equal(result.confidence, confidence);
     });
   }
 
-  it("normaliza mayúsculas y tildes", async () => {
-    const upper = await classifier.classify("TRÁFICO ALTO", 1);
-    assert.equal(upper.choice, "alto");
-    const accented = await classifier.classify("está saturado el servicio", 1);
-    assert.equal(accented.choice, "alto");
+  it("normalizes case and diacritics", async () => {
+    const upper = await classifier.classify("HIGH TRAFFIC", 1);
+    assert.equal(upper.choice, "high");
+    // Diacritics are stripped before matching (NFD), so accented input still
+    // classifies: "saturatéd" normalizes to "saturated".
+    const accented = await classifier.classify("saturatéd", 1);
+    assert.equal(accented.choice, "high");
   });
 
-  it("usa otras palabras clave del léxico esperado", async () => {
-    assert.equal((await classifier.classify("el pico de tráfico ya pasó", 2)).choice, "alto");
-    assert.equal((await classifier.classify("carga estable esta tarde", 2)).choice, "normal");
-    assert.equal((await classifier.classify("casi sin tráfico ahora", 2)).choice, "bajo");
+  it("uses other keywords of the expected lexicon", async () => {
+    assert.equal((await classifier.classify("the traffic peak has passed", 2)).choice, "high");
+    assert.equal((await classifier.classify("stable load this afternoon", 2)).choice, "normal");
+    assert.equal((await classifier.classify("almost without traffic right now", 2)).choice, "low");
   });
 
-  it("devuelve probabilidades plausibles: pico = confianza y suma ≈ 1", async () => {
+  it("returns plausible probabilities: peak = confidence and sum ≈ 1", async () => {
     for (const { text, choice, confidence } of phraseCases) {
       const result = await classifier.classify(text, 3);
       const total = Object.values(result.probabilities).reduce((a, b) => a + b, 0);
       assert.ok(
         Math.abs(total - 1) < 1e-9,
-        `las probabilidades de "${text}" deben sumar ≈ 1, fueron ${total}`,
+        `probabilities of "${text}" must sum to ≈ 1, got ${total}`,
       );
       assert.equal(result.probabilities[choice], confidence);
     }
   });
 
-  it("ignora las réplicas actuales: la heurística es determinista", async () => {
-    const withReplicas = await classifier.classify("tráfico normal", 6);
-    const withoutReplicas = await classifier.classify("tráfico normal", 0);
+  it("ignores the current replicas: the heuristic is deterministic", async () => {
+    const withReplicas = await classifier.classify("traffic normal", 6);
+    const withoutReplicas = await classifier.classify("traffic normal", 0);
     assert.deepStrictEqual(withReplicas, withoutReplicas);
   });
 });
@@ -173,14 +174,14 @@ describe("createClassifier", () => {
     }
   });
 
-  it("devuelve un JevClassifier cuando jevMock es false y hay clave de API", () => {
-    process.env.TYPESAFE_API_KEY = "clave-de-prueba";
+  it("returns a JevClassifier when jevMock is false and an API key exists", () => {
+    process.env.TYPESAFE_API_KEY = "test-key";
     const classifier = createClassifier({ jevMock: false });
     assert.ok(classifier instanceof JevClassifier);
     assert.ok(typeof classifier.classify === "function");
   });
 
-  it("lanza el error en español de requireTypesafeApiKey cuando jevMock es false y falta la clave", () => {
+  it("throws the requireTypesafeApiKey error when jevMock is false and the key is missing", () => {
     delete process.env.TYPESAFE_API_KEY;
     assert.throws(() => createClassifier({ jevMock: false }), /TYPESAFE_API_KEY/);
   });

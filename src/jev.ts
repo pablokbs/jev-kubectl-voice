@@ -1,9 +1,9 @@
 /**
- * Clasificación de transcripciones del operador con Jev (TypeSafe AI).
+ * Classification of operator transcripts with Jev (TypeSafe AI).
  *
- * Define la interfaz inyectable `Classifier`, la implementación real sobre el
- * SDK de TypeSafe (`JevClassifier`), y la fábrica `createClassifier`, que
- * devuelve el clasificador mock cuando `config.jevMock` es true.
+ * Defines the injectable `Classifier` interface, the real implementation on
+ * top of the TypeSafe SDK (`JevClassifier`), and the `createClassifier`
+ * factory, which returns the mock classifier when `config.jevMock` is true.
  */
 
 import { choice, TypeSafeClient } from "@typesafe-ai/sdk";
@@ -11,66 +11,67 @@ import type { ChoiceQuestion, SystemOneResult } from "@typesafe-ai/sdk";
 import { requireTypesafeApiKey } from "./config.js";
 import { MockClassifier } from "./mock-jev.js";
 
-/** Elección posible de la pregunta de tráfico, incluida la duda del operador. */
-export type TraficoChoice = "bajo" | "normal" | "alto" | "no_se";
+/** Possible choice of the traffic question, including the operator's doubt. */
+export type TrafficChoice = "low" | "normal" | "high" | "unsure";
 
-/** Resultado normalizado de una clasificación de tráfico. */
+/** Normalized result of a traffic classification. */
 export interface JevClassification {
-  /** Etiqueta elegida por el clasificador. */
-  choice: TraficoChoice;
-  /** Probabilidades por etiqueta, tal como las reporta el modelo. */
+  /** Label chosen by the classifier. */
+  choice: TrafficChoice;
+  /** Probabilities per label, as reported by the model. */
   probabilities: Record<string, number>;
-  /** Confianza reportada en la etiqueta elegida, de 0 a 1. */
+  /** Confidence reported for the chosen label, from 0 to 1. */
   confidence: number;
 }
 
-/** Interfaz inyectable: cualquier clasificador de tráfico (Jev real o mock). */
+/** Injectable interface: any traffic classifier (real Jev or mock). */
 export interface Classifier {
   classify(text: string, currentReplicas: number): Promise<JevClassification>;
 }
 
-/** Pregunta `choice` de tráfico, tal como se envía a la API de TypeSafe.
- *  La pregunta habla de la ORDEN del operador sobre la capacidad del servicio:
- *  cubre tanto órdenes crudas de emergencia ("pone todo lo que tenemos")
- *  como descripciones de tráfico ("tenemos mucho tráfico"). */
-const traficoQuestion = choice(
-  "Nivel de capacidad que el operador pide para el servicio según su orden: máxima capacidad o mucho tráfico = alto, todo normal = normal, poco uso = bajo",
+/** The traffic `choice` question, as sent to the TypeSafe API.
+ *  The question is about the OPERATOR'S ORDER on the service's capacity: it
+ *  covers both raw emergency orders ("put everything we have") and traffic
+ *  descriptions ("we have heavy traffic"). */
+const trafficQuestion = choice(
+  "Capacity level the operator is asking for the service based on their command: maximum capacity or heavy traffic = high, everything normal = normal, light usage = low",
   {
-  bajo: null,
-  normal: null,
-  alto: null,
-  no_se: null,
-});
+    low: null,
+    normal: null,
+    high: null,
+    unsure: null,
+  },
+);
 
-/** Tipo de la pregunta de tráfico, útil para construir clientes falsos en tests. */
-export type TraficoQuestion = ChoiceQuestion<{
-  bajo: null;
+/** Type of the traffic question, useful for building fake clients in tests. */
+export type TrafficQuestion = ChoiceQuestion<{
+  low: null;
   normal: null;
-  alto: null;
-  no_se: null;
+  high: null;
+  unsure: null;
 }>;
 
-/** Respuesta de `systemOne` para la pregunta de tráfico. */
-export type TraficoSystemOneResult = SystemOneResult<{ trafico: TraficoQuestion }>;
+/** `systemOne` result for the traffic question. */
+export type TrafficSystemOneResult = SystemOneResult<{ traffic: TrafficQuestion }>;
 
 /**
- * Cliente SDK mínimo que `JevClassifier` necesita. Estructuralmente satisfecho
- * por `TypeSafeClient` y por los dobles de prueba, que no tocan la red.
+ * Minimal SDK client that `JevClassifier` needs. Structurally satisfied by
+ * `TypeSafeClient` and by test doubles that never touch the network.
  */
 export interface TypeSafeSystemOneClient {
   systemOne(request: {
-    state: { comando_del_operador: string; replicas_actuales: number };
-    questions: { trafico: TraficoQuestion };
-  }): Promise<TraficoSystemOneResult> | TraficoSystemOneResult;
+    state: { operator_command: string; current_replicas: number };
+    questions: { traffic: TrafficQuestion };
+  }): Promise<TrafficSystemOneResult> | TrafficSystemOneResult;
 }
 
-/** Clasificador real: consulta a Jev (TypeSafe AI) con `systemOne`. */
+/** Real classifier: asks Jev (TypeSafe AI) with `systemOne`. */
 export class JevClassifier implements Classifier {
   private readonly client: TypeSafeSystemOneClient;
 
   /**
-   * @param client Cliente de TypeSafe; por defecto `TypeSafeClient`, que lee
-   *   `TYPESAFE_API_KEY` del entorno. Inyectable para tests sin red.
+   * @param client TypeSafe client; by default `TypeSafeClient`, which reads
+   *   `TYPESAFE_API_KEY` from the environment. Injectable for network-free tests.
    */
   constructor(client: TypeSafeSystemOneClient = new TypeSafeClient()) {
     this.client = client;
@@ -78,10 +79,10 @@ export class JevClassifier implements Classifier {
 
   async classify(text: string, currentReplicas: number): Promise<JevClassification> {
     const result = await this.client.systemOne({
-      state: { comando_del_operador: text, replicas_actuales: currentReplicas },
-      questions: { trafico: traficoQuestion },
+      state: { operator_command: text, current_replicas: currentReplicas },
+      questions: { traffic: trafficQuestion },
     });
-    const answer = result.answers.trafico;
+    const answer = result.answers.traffic;
     return {
       choice: answer.choice,
       probabilities: { ...answer.probabilities },
@@ -91,11 +92,11 @@ export class JevClassifier implements Classifier {
 }
 
 /**
- * Crea el clasificador según la configuración.
+ * Creates the classifier according to the configuration.
  *
- * Con `jevMock` true devuelve `MockClassifier` (determinista, sin red ni
- * clave). En caso contrario exige `TYPESAFE_API_KEY` (con el error en español
- * de `requireTypesafeApiKey`) y devuelve un `JevClassifier` real.
+ * With `jevMock` true it returns `MockClassifier` (deterministic, no network
+ * or key). Otherwise it requires `TYPESAFE_API_KEY` (with the error from
+ * `requireTypesafeApiKey`) and returns a real `JevClassifier`.
  */
 export function createClassifier(cfg: { jevMock: boolean }): Classifier {
   if (cfg.jevMock) {
